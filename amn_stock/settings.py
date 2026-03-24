@@ -108,3 +108,12 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Low stock threshold
 LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
+
+# ── Green API (WhatsApp) ────────────────────────────────────────────────────
+# Obtenir les credentials sur https://console.green-api.com/
+GREENAPI_INSTANCE_ID = os.environ.get('GREENAPI_INSTANCE_ID', '')
+GREENAPI_TOKEN       = os.environ.get('GREENAPI_TOKEN', '')
+# Numéro WhatsApp cible (sans +), ex: 237678317658 pour +237 678 317 658
+GREENAPI_RECIPIENT   = os.environ.get('GREENAPI_RECIPIENT', '237678317658')
+# URL de base Green API (ne pas modifier sauf test)
+GREENAPI_BASE_URL    = os.environ.get('GREENAPI_BASE_URL', 'https://api.green-api.com')

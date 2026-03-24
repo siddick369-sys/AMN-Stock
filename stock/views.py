@@ -13,7 +13,8 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import (Discharge, DischargeItem, Equipment, FieldReport,
                      ReturnedItem, StockMovement)
-from .tasks import send_hub_alert
+from .tasks import (send_hub_alert, whatsapp_discharge_created,
+                    whatsapp_field_report_created)
 
 
 def is_admin(user):
@@ -356,8 +357,11 @@ def discharge_create(request):
 
                 # Trigger low-stock real-time notification if needed
                 if item['equipment'].is_low_stock:
-                    from .tasks import notify_low_stock_realtime, check_low_stock
+                    from .tasks import notify_low_stock_realtime
                     notify_low_stock_realtime.delay(item['equipment'].id)
+
+        # ── WhatsApp : résumé de la décharge envoyé en arrière-plan ──
+        whatsapp_discharge_created.delay(discharge.id)
 
         messages.success(request, f'Décharge #{discharge.pk} créée avec succès.')
         return redirect('discharge_detail', pk=discharge.pk)
@@ -452,6 +456,9 @@ def field_report_create(request, discharge_pk):
 
             discharge.status = 'closed'
             discharge.save()
+
+        # ── WhatsApp : récapitulatif du rapport envoyé en arrière-plan ──
+        whatsapp_field_report_created.delay(report.id)
 
         messages.success(request, f'Rapport #{report.pk} créé et décharge #{discharge.pk} clôturée.')
         return redirect('field_report_detail', pk=report.pk)
