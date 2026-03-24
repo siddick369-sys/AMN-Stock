@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>Dashboard — Gestion de Stock{% endblock %}
+
+{% block extra_css %}
+<style>
+  .action-btn { padding: .2rem .55rem; font-size: .8rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Stat cards ── -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="icon-box bg-primary bg-opacity-10 text-primary"><i class="bi bi-boxes"></i></div>
+        <div>
+          <div class="text-muted small">Total équipements</div>
+          <div class="fs-4 fw-bold">{{ total_equipment }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="icon-box bg-warning bg-opacity-10 text-warning"><i class="bi bi-exclamation-triangle"></i></div>
+        <div>
+          <div class="text-muted small">Stock faible</div>
+          <div class="fs-4 fw-bold">{{ low_stock_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="icon-box bg-info bg-opacity-10 text-info"><i class="bi bi-box-arrow-up-right"></i></div>
+        <div>
+          <div class="text-muted small">Décharges en cours</div>
+          <div class="fs-4 fw-bold">{{ total_discharges }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="icon-box bg-success bg-opacity-10 text-success"><i class="bi bi-check2-circle"></i></div>
+        <div>
+          <div class="text-muted small">Stock global (unités)</div>
+          <div class="fs-4 fw-bold" id="total-units">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stock table ── -->
+<div class="card table-card mb-4">
+  <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center justify-content-between py-3 px-4">
+    <h6 class="mb-0 fw-semibold"><i class="bi bi-table me-2"></i>Inventaire des équipements</h6>
+    <div class="d-flex gap-2 flex-wrap">
+      <!-- Search -->
+      <form class="d-flex" method="get" action="">
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" class="form-control" placeholder="Rechercher…" value="{{ search_query }}">
+          <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+          {% if search_query %}
+          <a href="{% url 'dashboard' %}" class="btn btn-outline-danger"><i class="bi bi-x"></i></a>
+          {% endif %}
+        </div>
+      </form>
+      <!-- Hub alert -->
+      <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#hubModal">
+        <i class="bi bi-bell-fill me-1"></i>Alerter le Hub
+      </button>
+      <!-- Add equipment -->
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+        <i class="bi bi-plus-lg me-1"></i>Ajouter
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="equipment-table">
+      <thead>
+        <tr>
+          <th>Référence</th>
+          <th>Nom de l'équipement</th>
+          <th class="text-center">Stock</th>
+          <th class="text-center">Défectueux</th>
+          <th class="text-center">Statut</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="equipment-tbody">
+        {% for eq in equipments %}
+        <tr id="row-{{ eq.id }}" data-id="{{ eq.id }}">
+          <td><code>{{ eq.reference }}</code></td>
+          <td class="fw-semibold">{{ eq.name }}</td>
+          <td class="text-center"><strong>{{ eq.quantity }}</strong></td>
+          <td class="text-center text-danger">{{ eq.defective_quantity }}</td>
+          <td class="text-center">
+            {% if eq.is_low_stock %}
+            <span class="badge badge-stock-low rounded-pill px-3">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>Stock faible
+            </span>
+            {% else %}
+            <span class="badge badge-stock-ok rounded-pill px-3">
+              <i class="bi bi-check-circle-fill me-1"></i>OK
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button class="btn btn-outline-primary action-btn me-1" title="Modifier"
+                    onclick="openEditModal({{ eq.id }})">
+              <i class="bi bi-pencil-fill"></i>
+            </button>
+            <button class="btn btn-outline-danger action-btn" title="Supprimer"
+                    onclick="openDeleteModal({{ eq.id }}, '{{ eq.name|escapejs }}')">
+              <i class="bi bi-trash-fill"></i>
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            {% if search_query %}
+              Aucun résultat pour "<strong>{{ search_query }}</strong>"
+            {% else %}
+              Aucun équipement enregistré. Cliquez sur "Ajouter" pour commencer.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Chart ── -->
+<div class="card table-card">
+  <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center justify-content-between py-3 px-4">
+    <h6 class="mb-0 fw-semibold"><i class="bi bi-bar-chart-line me-2"></i>Évolution du stock</h6>
+    <div class="btn-group btn-group-sm" id="chart-period">
+      <button class="btn btn-outline-primary" data-period="day">Jour</button>
+      <button class="btn btn-primary active" data-period="week">Semaine</button>
+      <button class="btn btn-outline-primary" data-period="month">Mois</button>
+    </div>
+  </div>
+  <div class="card-body">
+    <canvas id="stockChart" height="90"></canvas>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     MODALS
+═════════════════════════════════════════ -->
+
+<!-- ADD MODAL -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Ajouter un équipement</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="add-error" class="alert alert-danger d-none"></div>
+        <form id="add-form">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" placeholder="Ex: Routeur 4G LTE" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Référence <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="reference" placeholder="Ex: RTR-4G-001" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Quantité en stock</label>
+              <input type="number" class="form-control" name="quantity" value="0" min="0">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Qté défectueuse</label>
+              <input type="number" class="form-control" name="defective_quantity" value="0" min="0">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitAdd()">
+          <i class="bi bi-save me-1"></i>Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifier un équipement</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="edit-error" class="alert alert-danger d-none"></div>
+        <form id="edit-form">
+          <input type="hidden" id="edit-id">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="edit-name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Référence <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="edit-reference" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Quantité en stock</label>
+              <input type="number" class="form-control" id="edit-quantity" min="0">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Qté défectueuse</label>
+              <input type="number" class="form-control" id="edit-defective" min="0">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitEdit()">
+          <i class="bi bi-save me-1"></i>Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- DELETE MODAL -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Confirmer la suppression</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delete-id">
+        <p>Voulez-vous vraiment supprimer <strong id="delete-name"></strong> ?</p>
+        <p class="text-muted small mb-0">Cette action est irréversible.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="submitDelete()">
+          <i class="bi bi-trash-fill me-1"></i>Supprimer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- HUB ALERT MODAL -->
+<div class="modal fade" id="hubModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>Alerter le Hub — Équipements défectueux</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Sélectionnez les équipements défectueux à signaler au Hub. Un email récapitulatif sera envoyé automatiquement.</p>
+        <div id="hub-error" class="alert alert-danger d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:40px"><input type="checkbox" id="hub-check-all" title="Tout sélectionner"></th>
+                <th>Référence</th>
+                <th>Nom</th>
+                <th class="text-center">Stock</th>
+                <th class="text-center">Défectueux</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for eq in equipments %}
+              <tr>
+                <td><input type="checkbox" class="hub-check" value="{{ eq.id }}"></td>
+                <td><code>{{ eq.reference }}</code></td>
+                <td>{{ eq.name }}</td>
+                <td class="text-center">{{ eq.quantity }}</td>
+                <td class="text-center text-danger fw-bold">{{ eq.defective_quantity }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted py-3">Aucun équipement</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-warning" onclick="submitHubAlert()">
+          <i class="bi bi-send me-1"></i>Envoyer l'alerte
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+// ═══════════════════════════════
+// TOTAL UNITS COUNTER
+// ═══════════════════════════════
+(function computeTotal() {
+  let total = 0;
+  document.querySelectorAll('#equipment-tbody tr[data-id]').forEach(row => {
+    const qty = parseInt(row.querySelectorAll('td')[2]?.textContent.trim()) || 0;
+    total += qty;
+  });
+  document.getElementById('total-units').textContent = total.toLocaleString('fr-FR');
+})();
+
+// ═══════════════════════════════
+// CHART.JS
+// ═══════════════════════════════
+let stockChart;
+
+function buildChart(labels, entries, exits) {
+  const ctx = document.getElementById('stockChart').getContext('2d');
+  if (stockChart) stockChart.destroy();
+  stockChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Entrées',
+          data: entries,
+          backgroundColor: 'rgba(13,110,253,.7)',
+          borderColor: 'rgba(13,110,253,1)',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          label: 'Sorties',
+          data: exits,
+          backgroundColor: 'rgba(220,53,69,.7)',
+          borderColor: 'rgba(220,53,69,1)',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label} : ${ctx.parsed.y} unité(s)`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, precision: 0 },
+        }
+      }
+    }
+  });
+}
+
+function loadChart(period) {
+  fetch(`/api/stock-chart/?period=${period}`)
+    .then(r => r.json())
+    .then(d => buildChart(d.labels, d.entries, d.exits))
+    .catch(() => showToast('Erreur lors du chargement du graphique', 'danger'));
+}
+
+// Period buttons
+document.querySelectorAll('#chart-period button').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('#chart-period button').forEach(b => {
+      b.className = 'btn btn-outline-primary';
+    });
+    this.className = 'btn btn-primary active';
+    loadChart(this.dataset.period);
+  });
+});
+
+loadChart('week');
+
+// ═══════════════════════════════
+// ADD EQUIPMENT
+// ═══════════════════════════════
+function submitAdd() {
+  const form = document.getElementById('add-form');
+  const err = document.getElementById('add-error');
+  const data = {
+    name: form.querySelector('[name=name]').value.trim(),
+    reference: form.querySelector('[name=reference]').value.trim(),
+    quantity: parseInt(form.querySelector('[name=quantity]').value) || 0,
+    defective_quantity: parseInt(form.querySelector('[name=defective_quantity]').value) || 0,
+  };
+
+  if (!data.name || !data.reference) {
+    err.textContent = 'Nom et référence sont obligatoires.';
+    err.classList.remove('d-none');
+    return;
+  }
+
+  fetchJSON('/api/equipment/create/', 'POST', data)
+    .then(res => {
+      if (res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('addModal')).hide();
+        form.reset();
+        err.classList.add('d-none');
+        appendRow(res.equipment);
+        updateTotal(res.equipment.quantity);
+        showToast(`"${res.equipment.name}" ajouté avec succès.`);
+      } else {
+        err.textContent = res.error;
+        err.classList.remove('d-none');
+      }
+    })
+    .catch(() => { err.textContent = 'Erreur serveur.'; err.classList.remove('d-none'); });
+}
+
+function appendRow(eq) {
+  const tbody = document.getElementById('equipment-tbody');
+  // Remove "empty" row if present
+  tbody.querySelector('tr:not([data-id])')?.remove();
+
+  const badge = eq.is_low_stock
+    ? `<span class="badge badge-stock-low rounded-pill px-3"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock faible</span>`
+    : `<span class="badge badge-stock-ok rounded-pill px-3"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`;
+
+  tbody.insertAdjacentHTML('beforeend', `
+    <tr id="row-${eq.id}" data-id="${eq.id}">
+      <td><code>${eq.reference}</code></td>
+      <td class="fw-semibold">${eq.name}</td>
+      <td class="text-center"><strong>${eq.quantity}</strong></td>
+      <td class="text-center text-danger">${eq.defective_quantity}</td>
+      <td class="text-center">${badge}</td>
+      <td class="text-center">
+        <button class="btn btn-outline-primary action-btn me-1" title="Modifier" onclick="openEditModal(${eq.id})">
+          <i class="bi bi-pencil-fill"></i>
+        </button>
+        <button class="btn btn-outline-danger action-btn" title="Supprimer" onclick="openDeleteModal(${eq.id}, '${eq.name.replace(/'/g, "\\'")}')">
+          <i class="bi bi-trash-fill"></i>
+        </button>
+      </td>
+    </tr>`);
+}
+
+// ═══════════════════════════════
+// EDIT EQUIPMENT
+// ═══════════════════════════════
+function openEditModal(id) {
+  fetchJSON(`/api/equipment/${id}/`)
+    .then(eq => {
+      document.getElementById('edit-id').value = eq.id;
+      document.getElementById('edit-name').value = eq.name;
+      document.getElementById('edit-reference').value = eq.reference;
+      document.getElementById('edit-quantity').value = eq.quantity;
+      document.getElementById('edit-defective').value = eq.defective_quantity;
+      document.getElementById('edit-error').classList.add('d-none');
+      new bootstrap.Modal(document.getElementById('editModal')).show();
+    })
+    .catch(() => showToast('Impossible de charger l\'équipement.', 'danger'));
+}
+
+function submitEdit() {
+  const id = document.getElementById('edit-id').value;
+  const err = document.getElementById('edit-error');
+  const data = {
+    name: document.getElementById('edit-name').value.trim(),
+    reference: document.getElementById('edit-reference').value.trim(),
+    quantity: parseInt(document.getElementById('edit-quantity').value) || 0,
+    defective_quantity: parseInt(document.getElementById('edit-defective').value) || 0,
+  };
+
+  if (!data.name || !data.reference) {
+    err.textContent = 'Nom et référence sont obligatoires.';
+    err.classList.remove('d-none');
+    return;
+  }
+
+  fetchJSON(`/api/equipment/${id}/update/`, 'POST', data)
+    .then(res => {
+      if (res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+        err.classList.add('d-none');
+        updateRow(res.equipment);
+        showToast(`"${res.equipment.name}" mis à jour.`);
+      } else {
+        err.textContent = res.error;
+        err.classList.remove('d-none');
+      }
+    })
+    .catch(() => { err.textContent = 'Erreur serveur.'; err.classList.remove('d-none'); });
+}
+
+function updateRow(eq) {
+  const row = document.getElementById(`row-${eq.id}`);
+  if (!row) return;
+  const badge = eq.is_low_stock
+    ? `<span class="badge badge-stock-low rounded-pill px-3"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock faible</span>`
+    : `<span class="badge badge-stock-ok rounded-pill px-3"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`;
+  row.innerHTML = `
+    <td><code>${eq.reference}</code></td>
+    <td class="fw-semibold">${eq.name}</td>
+    <td class="text-center"><strong>${eq.quantity}</strong></td>
+    <td class="text-center text-danger">${eq.defective_quantity}</td>
+    <td class="text-center">${badge}</td>
+    <td class="text-center">
+      <button class="btn btn-outline-primary action-btn me-1" title="Modifier" onclick="openEditModal(${eq.id})">
+        <i class="bi bi-pencil-fill"></i>
+      </button>
+      <button class="btn btn-outline-danger action-btn" title="Supprimer" onclick="openDeleteModal(${eq.id}, '${eq.name.replace(/'/g, "\\'")}')">
+        <i class="bi bi-trash-fill"></i>
+      </button>
+    </td>`;
+  // Recalculate total
+  recomputeTotal();
+}
+
+// ═══════════════════════════════
+// DELETE EQUIPMENT
+// ═══════════════════════════════
+function openDeleteModal(id, name) {
+  document.getElementById('delete-id').value = id;
+  document.getElementById('delete-name').textContent = name;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function submitDelete() {
+  const id = document.getElementById('delete-id').value;
+  fetchJSON(`/api/equipment/${id}/delete/`, 'POST')
+    .then(res => {
+      if (res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+        document.getElementById(`row-${id}`)?.remove();
+        recomputeTotal();
+        showToast(res.message, 'warning');
+
+        if (!document.querySelector('#equipment-tbody tr[data-id]')) {
+          document.getElementById('equipment-tbody').innerHTML =
+            `<tr><td colspan="6" class="text-center text-muted py-4">Aucun équipement enregistré.</td></tr>`;
+        }
+      } else {
+        showToast(res.error, 'danger');
+      }
+    })
+    .catch(() => showToast('Erreur serveur.', 'danger'));
+}
+
+// ═══════════════════════════════
+// HUB ALERT
+// ═══════════════════════════════
+document.getElementById('hub-check-all')?.addEventListener('change', function () {
+  document.querySelectorAll('.hub-check').forEach(cb => cb.checked = this.checked);
+});
+
+function submitHubAlert() {
+  const err = document.getElementById('hub-error');
+  const ids = Array.from(document.querySelectorAll('.hub-check:checked')).map(cb => parseInt(cb.value));
+  if (ids.length === 0) {
+    err.textContent = 'Veuillez sélectionner au moins un équipement.';
+    err.classList.remove('d-none');
+    return;
+  }
+  fetchJSON('/api/hub-alert/', 'POST', { equipment_ids: ids })
+    .then(res => {
+      if (res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('hubModal')).hide();
+        err.classList.add('d-none');
+        showToast(res.message, 'info');
+      } else {
+        err.textContent = res.error;
+        err.classList.remove('d-none');
+      }
+    })
+    .catch(() => { err.textContent = 'Erreur serveur.'; err.classList.remove('d-none'); });
+}
+
+// ═══════════════════════════════
+// HELPERS
+// ═══════════════════════════════
+function recomputeTotal() {
+  let total = 0;
+  document.querySelectorAll('#equipment-tbody tr[data-id]').forEach(row => {
+    const qty = parseInt(row.querySelectorAll('td')[2]?.textContent.trim()) || 0;
+    total += qty;
+  });
+  document.getElementById('total-units').textContent = total.toLocaleString('fr-FR');
+}
+
+function updateTotal(addQty) {
+  const el = document.getElementById('total-units');
+  const cur = parseInt(el.textContent.replace(/\s/g, '')) || 0;
+  el.textContent = (cur + addQty).toLocaleString('fr-FR');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle Décharge{% endblock %}
+{% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Nouvelle Décharge{% endblock %}
+
+{% block extra_css %}
+<style>
+  .item-row { background: #f8f9fa; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; }
+  .item-row:hover { background: #e3f2fd; }
+  .remove-item { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <!-- Error modal trigger (set by JS on server validation fail) -->
+    <div class="modal fade" id="errorModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Stock insuffisant</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="error-modal-body"></div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Corriger</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <div class="card-header bg-white px-4 py-3">
+        <h6 class="mb-0 fw-semibold">Formulaire de décharge d'équipements</h6>
+        <small class="text-muted">Les quantités demandées seront déduites du stock global après validation.</small>
+      </div>
+      <div class="card-body p-4">
+
+        {% if errors %}
+        <div class="alert alert-danger">
+          <strong><i class="bi bi-exclamation-triangle-fill me-2"></i>Erreurs détectées :</strong>
+          <ul class="mb-0 mt-2">
+            {% for err in errors %}<li>{{ err }}</li>{% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <form method="post" id="discharge-form" novalidate>
+          {% csrf_token %}
+
+          <!-- Destination -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Destination / Mission <span class="text-danger">*</span></label>
+            <input type="text" name="destination" class="form-control"
+                   placeholder="Ex: Mission Abidjan Nord — Installation antenne site BTS-042"
+                   value="{{ request.POST.destination }}" required>
+          </div>
+
+          <!-- Items section -->
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-semibold mb-0">
+                <i class="bi bi-boxes me-1"></i>Équipements à emporter <span class="text-danger">*</span>
+              </label>
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()">
+                <i class="bi bi-plus-lg me-1"></i>Ajouter un équipement
+              </button>
+            </div>
+
+            <div id="items-container">
+              <!-- Item rows injected by JS -->
+            </div>
+            <p class="text-muted small mt-1" id="no-item-hint">Cliquez sur "Ajouter un équipement" pour commencer.</p>
+          </div>
+
+          <!-- Submit -->
+          <div class="d-flex gap-2 justify-content-end border-top pt-3 mt-2">
+            <a href="{% url 'discharge_list' %}" class="btn btn-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Annuler
+            </a>
+            <button type="submit" class="btn btn-primary" id="submit-btn">
+              <i class="bi bi-send-fill me-1"></i>Valider la décharge
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Equipment data passed from Django -->
+<script>
+const EQUIPMENTS = [
+  {% for eq in equipments %}
+  { id: {{ eq.id }}, name: "{{ eq.name|escapejs }}", reference: "{{ eq.reference|escapejs }}", stock: {{ eq.quantity }} }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let itemCount = 0;
+
+function buildOptions(selectedId) {
+  let opts = '<option value="">-- Choisir un équipement --</option>';
+  EQUIPMENTS.forEach(eq => {
+    const sel = eq.id == selectedId ? 'selected' : '';
+    opts += `<option value="${eq.id}" data-stock="${eq.stock}" ${sel}>${eq.name} (${eq.reference}) — Stock: ${eq.stock}</option>`;
+  });
+  return opts;
+}
+
+function addItem(eqId='', qty=1) {
+  itemCount++;
+  document.getElementById('no-item-hint').style.display = 'none';
+
+  const div = document.createElement('div');
+  div.className = 'item-row d-flex gap-2 align-items-center';
+  div.id = `item-row-${itemCount}`;
+  div.innerHTML = `
+    <div class="flex-grow-1">
+      <select name="equipment_id[]" class="form-select form-select-sm eq-select"
+              onchange="updateMaxQty(this)" required>
+        ${buildOptions(eqId)}
+      </select>
+    </div>
+    <div style="width:130px">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">Qté</span>
+        <input type="number" name="quantity[]" class="form-control qty-input"
+               value="${qty}" min="1" placeholder="0" required>
+      </div>
+      <small class="text-muted stock-hint ms-1"></small>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger remove-item"
+            onclick="removeItem('item-row-${itemCount}')">
+      <i class="bi bi-trash-fill"></i>
+    </button>`;
+  document.getElementById('items-container').appendChild(div);
+
+  // Init stock hint
+  const sel = div.querySelector('.eq-select');
+  if (eqId) updateMaxQty(sel);
+}
+
+function updateMaxQty(sel) {
+  const opt = sel.selectedOptions[0];
+  const stock = opt?.dataset?.stock;
+  const row = sel.closest('.item-row');
+  const qtyInput = row.querySelector('.qty-input');
+  const hint = row.querySelector('.stock-hint');
+  if (stock !== undefined) {
+    qtyInput.max = stock;
+    hint.textContent = `Disponible : ${stock}`;
+    hint.className = 'text-muted small stock-hint ms-1';
+  } else {
+    hint.textContent = '';
+  }
+}
+
+function removeItem(rowId) {
+  document.getElementById(rowId)?.remove();
+  if (!document.querySelector('.item-row')) {
+    document.getElementById('no-item-hint').style.display = '';
+  }
+}
+
+// ── Form submission with client-side pre-validation ──
+document.getElementById('discharge-form').addEventListener('submit', function(e) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length === 0) {
+    e.preventDefault();
+    showToast('Ajoutez au moins un équipement à la décharge.', 'warning');
+    return;
+  }
+
+  const errors = [];
+  rows.forEach(row => {
+    const sel = row.querySelector('.eq-select');
+    const qtyInput = row.querySelector('.qty-input');
+    const opt = sel.selectedOptions[0];
+    if (!sel.value) { errors.push('Un équipement n\'est pas sélectionné.'); return; }
+    const qty = parseInt(qtyInput.value);
+    const stock = parseInt(opt?.dataset?.stock || 0);
+    const name = opt?.text?.split(' (')[0] || 'Inconnu';
+    if (isNaN(qty) || qty <= 0) {
+      errors.push(`Quantité invalide pour "${name}".`);
+    } else if (qty > stock) {
+      errors.push(`L'item "${name}" est insuffisant pour votre décharge. Stock disponible : ${stock}, demandé : ${qty}.`);
+    }
+  });
+
+  if (errors.length > 0) {
+    e.preventDefault();
+    const body = document.getElementById('error-modal-body');
+    body.innerHTML = '<ul class="mb-0">' + errors.map(err => `<li>${err}</li>`).join('') + '</ul>';
+    new bootstrap.Modal(document.getElementById('errorModal')).show();
+  }
+});
+
+// Add one empty row on load
+addItem();
+</script>
+{% endblock %}

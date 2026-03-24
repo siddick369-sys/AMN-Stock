@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Décharges{% endblock %}
+{% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Mes Décharges{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <p class="text-muted mb-0">Liste de toutes les décharges d'équipements.</p>
+  <a href="{% url 'discharge_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Nouvelle décharge
+  </a>
+</div>
+
+<div class="card table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Technicien</th>
+          <th>Destination / Mission</th>
+          <th>Date départ</th>
+          <th class="text-center">Équipements</th>
+          <th class="text-center">Statut</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in discharges %}
+        <tr>
+          <td><strong>#{{ d.pk }}</strong></td>
+          <td>{{ d.user.get_full_name|default:d.user.username }}</td>
+          <td>{{ d.destination }}</td>
+          <td>{{ d.date|date:"d/m/Y H:i" }}</td>
+          <td class="text-center">{{ d.items.count }}</td>
+          <td class="text-center">
+            {% if d.status == 'open' %}
+            <span class="badge bg-info text-dark rounded-pill">En cours</span>
+            {% else %}
+            <span class="badge bg-success rounded-pill">Clôturée</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <a href="{% url 'discharge_detail' d.pk %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye-fill"></i>
+            </a>
+            {% if d.status == 'open' %}
+            <a href="{% url 'field_report_create' d.pk %}" class="btn btn-sm btn-outline-success ms-1" title="Créer rapport de retour">
+              <i class="bi bi-file-earmark-plus-fill"></i>
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            Aucune décharge enregistrée. <a href="{% url 'discharge_create' %}">Créer une décharge</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

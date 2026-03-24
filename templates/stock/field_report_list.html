@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Rapports de terrain{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapports de terrain{% endblock %}
+
+{% block content %}
+<div class="card table-card">
+  <div class="card-header bg-white px-4 py-3">
+    <h6 class="mb-0 fw-semibold">Historique des rapports de mission</h6>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Technicien</th>
+          <th>Décharge</th>
+          <th>Destination</th>
+          <th>Date de retour</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for report in reports %}
+        <tr>
+          <td><strong>#{{ report.pk }}</strong></td>
+          <td>{{ report.discharge.user.get_full_name|default:report.discharge.user.username }}</td>
+          <td><a href="{% url 'discharge_detail' report.discharge.pk %}">#{{ report.discharge.pk }}</a></td>
+          <td>{{ report.discharge.destination }}</td>
+          <td>{{ report.date|date:"d/m/Y H:i" }}</td>
+          <td class="text-center">
+            <a href="{% url 'field_report_detail' report.pk %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye-fill"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            Aucun rapport enregistré.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

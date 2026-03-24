@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Rapport #{{ report.pk }}{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapport de terrain #{{ report.pk }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <!-- Header info -->
+    <div class="card table-card mb-4">
+      <div class="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold">Informations de la mission</h6>
+        <span class="badge bg-success rounded-pill px-3"><i class="bi bi-check-circle-fill me-1"></i>Mission clôturée</span>
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3 mb-4">
+          <div class="col-sm-6">
+            <div class="text-muted small">Technicien</div>
+            <div class="fw-semibold">{{ report.discharge.user.get_full_name|default:report.discharge.user.username }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-muted small">Date de retour</div>
+            <div class="fw-semibold">{{ report.date|date:"d/m/Y H:i" }}</div>
+          </div>
+          <div class="col-12">
+            <div class="text-muted small">Destination / Mission</div>
+            <div class="fw-semibold">{{ report.discharge.destination }}</div>
+          </div>
+          <div class="col-12">
+            <div class="text-muted small mb-1">Rapport détaillé</div>
+            <div class="bg-light p-3 rounded" style="white-space:pre-wrap; line-height:1.7;">{{ report.description }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Returned items -->
+    <div class="card table-card mb-4">
+      <div class="card-header bg-white px-4 py-3">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-arrow-return-left me-1"></i>Récapitulatif des retours</h6>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Équipement</th>
+              <th>Référence</th>
+              <th class="text-center">Qté emportée</th>
+              <th class="text-center">Qté ramenée</th>
+              <th class="text-center">État</th>
+              <th class="text-center">Consommé / Perdu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ret in report.returned_items.all %}
+            {% with discharge_item=report.discharge.items.all %}
+            <tr>
+              <td class="fw-semibold">{{ ret.equipment.name }}</td>
+              <td><code>{{ ret.equipment.reference }}</code></td>
+              <td class="text-center">
+                {% for di in report.discharge.items.all %}
+                  {% if di.equipment_id == ret.equipment_id %}{{ di.quantity }}{% endif %}
+                {% endfor %}
+              </td>
+              <td class="text-center"><strong>{{ ret.quantity_returned }}</strong></td>
+              <td class="text-center">
+                {% if ret.condition == 'good' %}
+                <span class="badge bg-success rounded-pill">Bon état</span>
+                {% else %}
+                <span class="badge bg-danger rounded-pill">Défectueux</span>
+                {% endif %}
+              </td>
+              <td class="text-center text-warning">
+                {% for di in report.discharge.items.all %}
+                  {% if di.equipment_id == ret.equipment_id %}
+                    {{ di.quantity|add:ret.quantity_returned|add:"-"|add:ret.quantity_returned }}
+                    {% with used=di.quantity|add:"-0" %}
+                      <span>{{ di.quantity }} - {{ ret.quantity_returned }} = <strong>{{ di.quantity|add:"-"|add:ret.quantity_returned }}</strong></span>
+                    {% endwith %}
+                  {% endif %}
+                {% endfor %}
+              </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-3">Aucun article retourné.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{% url 'discharge_detail' report.discharge.pk %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Voir la décharge
+      </a>
+      <a href="{% url 'field_report_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Tous les rapports
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

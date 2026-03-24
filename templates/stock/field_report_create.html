@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Rapport de terrain — Décharge #{{ discharge.pk }}{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapport de terrain — Décharge #{{ discharge.pk }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .return-row { background: #f8f9fa; border-radius: 8px; padding: 1rem; margin-bottom: .75rem; }
+  .condition-badge { font-size: .85rem; cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card table-card">
+      <div class="card-header bg-white px-4 py-3">
+        <h6 class="mb-0 fw-semibold">Clôture de mission — Rapport de retour</h6>
+        <small class="text-muted">
+          Mission : <strong>{{ discharge.destination }}</strong> |
+          Départ : {{ discharge.date|date:"d/m/Y" }}
+        </small>
+      </div>
+      <div class="card-body p-4">
+        <form method="post" id="report-form" novalidate>
+          {% csrf_token %}
+
+          <!-- Description -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-journal-text me-1"></i>Rapport détaillé des actions sur le terrain
+              <span class="text-danger">*</span>
+            </label>
+            <textarea name="description" class="form-control" rows="6"
+                      placeholder="Décrivez en détail les travaux effectués, les difficultés rencontrées, l'état du site, etc."
+                      required>{{ request.POST.description }}</textarea>
+          </div>
+
+          <!-- Returned items -->
+          <h6 class="fw-semibold border-bottom pb-2 mb-3">
+            <i class="bi bi-arrow-return-left me-1"></i>Équipements ramenés au hub
+          </h6>
+          <p class="text-muted small mb-3">
+            Pour chaque équipement emporté, indiquez la quantité ramenée et son état.
+            Les équipements en <strong>bon état</strong> seront réintégrés au stock automatiquement.
+          </p>
+
+          {% for item in discharge_items %}
+          <div class="return-row">
+            <div class="row g-3 align-items-center">
+              <div class="col-md-5">
+                <div class="fw-semibold">{{ item.equipment.name }}</div>
+                <small class="text-muted">
+                  <code>{{ item.equipment.reference }}</code> —
+                  Emporté : <strong>{{ item.quantity }}</strong> unité(s)
+                </small>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small mb-1">Quantité ramenée</label>
+                <div class="input-group input-group-sm">
+                  <input type="number"
+                         name="quantity_returned_{{ item.id }}"
+                         class="form-control"
+                         value="0"
+                         min="0"
+                         max="{{ item.quantity }}"
+                         placeholder="0">
+                  <span class="input-group-text text-muted">/ {{ item.quantity }}</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small mb-1">État</label>
+                <div class="btn-group w-100 btn-group-sm" role="group">
+                  <input type="radio" class="btn-check" name="condition_{{ item.id }}"
+                         id="good_{{ item.id }}" value="good" checked>
+                  <label class="btn btn-outline-success condition-badge" for="good_{{ item.id }}">
+                    <i class="bi bi-check-circle me-1"></i>Bon état
+                  </label>
+
+                  <input type="radio" class="btn-check" name="condition_{{ item.id }}"
+                         id="defective_{{ item.id }}" value="defective">
+                  <label class="btn btn-outline-danger condition-badge" for="defective_{{ item.id }}">
+                    <i class="bi bi-x-circle me-1"></i>Défectueux
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="alert alert-info">Aucun équipement trouvé dans cette décharge.</div>
+          {% endfor %}
+
+          <!-- Summary info box -->
+          <div class="alert alert-info d-flex gap-2 mt-3">
+            <i class="bi bi-info-circle-fill fs-5 flex-shrink-0"></i>
+            <div class="small">
+              <strong>Rappel :</strong> Les équipements ramenés en <strong>bon état</strong> seront
+              automatiquement réintégrés au stock disponible. Les équipements <strong>défectueux</strong>
+              seront enregistrés séparément dans le compteur de défectueux.
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="d-flex gap-2 justify-content-end border-top pt-3 mt-2">
+            <a href="{% url 'discharge_detail' discharge.pk %}" class="btn btn-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Annuler
+            </a>
+            <button type="submit" class="btn btn-success" id="submit-btn">
+              <i class="bi bi-check2-all me-1"></i>Valider le rapport & clôturer la mission
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('report-form').addEventListener('submit', function(e) {
+  const desc = this.querySelector('textarea[name=description]').value.trim();
+  if (!desc) {
+    e.preventDefault();
+    showToast('Le rapport détaillé est obligatoire.', 'warning');
+    this.querySelector('textarea').focus();
+  }
+});
+</script>
+{% endblock %}

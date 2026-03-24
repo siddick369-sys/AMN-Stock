@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AMN Stock{% endblock %} — Africa Mobile Networks</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --amn-blue:   #0d47a1;
+      --amn-orange: #e65100;
+      --amn-light:  #e3f2fd;
+      --sidebar-w:  250px;
+    }
+
+    body { background: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--amn-blue);
+      position: fixed;
+      top: 0; left: 0;
+      display: flex;
+      flex-direction: column;
+      transition: width .25s;
+      z-index: 1040;
+    }
+    #sidebar .brand {
+      padding: 1.25rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,.15);
+      text-align: center;
+    }
+    #sidebar .brand img { width: 48px; }
+    #sidebar .brand span {
+      display: block;
+      color: #fff;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: .5px;
+    }
+    #sidebar .nav-link {
+      color: rgba(255,255,255,.8);
+      padding: .65rem 1.25rem;
+      border-radius: 8px;
+      margin: 2px 8px;
+      font-size: .9rem;
+      transition: background .2s;
+    }
+    #sidebar .nav-link:hover,
+    #sidebar .nav-link.active {
+      background: rgba(255,255,255,.15);
+      color: #fff;
+    }
+    #sidebar .nav-link i { width: 20px; margin-right: 8px; }
+
+    /* ── Main wrapper ── */
+    #main-content {
+      margin-left: var(--sidebar-w);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: .6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 1030;
+    }
+
+    /* ── Cards ── */
+    .stat-card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    .stat-card .icon-box {
+      width: 48px; height: 48px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+    }
+
+    /* ── Table ── */
+    .table-card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .table thead th {
+      background: var(--amn-blue);
+      color: #fff;
+      font-weight: 500;
+      border: none;
+    }
+    .table tbody tr:hover { background: var(--amn-light); }
+
+    /* ── Badge stock ── */
+    .badge-stock-low { background: #fff3e0; color: #e65100; border: 1px solid #ffcc02; }
+    .badge-stock-ok  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+
+    /* ── Toast container ── */
+    #toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      #sidebar { width: 0; overflow: hidden; }
+      #sidebar.open { width: var(--sidebar-w); }
+      #main-content { margin-left: 0; }
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<!-- ══════ SIDEBAR ══════ -->
+<nav id="sidebar">
+  <div class="brand">
+    <span>AMN</span>
+    <small style="color:rgba(255,255,255,.6);font-size:.75rem;">Gestion de Stock</small>
+  </div>
+
+  <ul class="nav flex-column mt-3 px-1 flex-grow-1">
+    {% if user.is_staff %}
+    <li class="nav-item">
+      <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+    </li>
+    {% endif %}
+    <li class="nav-item">
+      <a href="{% url 'discharge_list' %}" class="nav-link {% if 'discharge' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-box-arrow-up-right"></i> Décharges
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'field_report_list' %}" class="nav-link {% if 'field_report' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-file-earmark-text"></i> Rapports terrain
+      </a>
+    </li>
+  </ul>
+
+  <div class="p-3 border-top" style="border-color:rgba(255,255,255,.15)!important;">
+    <div class="d-flex align-items-center gap-2 text-white-50 small">
+      <i class="bi bi-person-circle fs-5"></i>
+      <div>
+        <div class="text-white fw-semibold">{{ user.get_full_name|default:user.username }}</div>
+        <div>{% if user.is_staff %}Administrateur{% else %}Technicien{% endif %}</div>
+      </div>
+    </div>
+    <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-light w-100 mt-2">
+      <i class="bi bi-box-arrow-right"></i> Déconnexion
+    </a>
+  </div>
+</nav>
+
+<!-- ══════ MAIN ══════ -->
+<div id="main-content">
+  <header class="topbar">
+    <button class="btn btn-sm btn-light d-md-none" id="sidebar-toggle">
+      <i class="bi bi-list fs-5"></i>
+    </button>
+    <h5 class="mb-0 fw-semibold text-primary">{% block page_title %}{% endblock %}</h5>
+    <div class="d-flex align-items-center gap-2">
+      <!-- Notification bell -->
+      <div class="dropdown">
+        <button class="btn btn-light btn-sm position-relative" id="notif-btn" data-bs-toggle="dropdown">
+          <i class="bi bi-bell"></i>
+          <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle d-none" id="notif-count">0</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow" id="notif-list" style="min-width:320px;max-height:360px;overflow-y:auto;">
+          <li class="px-3 py-2 text-muted small" id="notif-empty">Aucune notification</li>
+        </ul>
+      </div>
+      <span class="text-muted small d-none d-sm-block">{{ user.username }}</span>
+    </div>
+  </header>
+
+  <main class="p-4 flex-grow-1">
+    <!-- Django messages -->
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="text-center text-muted py-3 small border-top bg-white">
+    &copy; {% now "Y" %} Africa Mobile Networks — Système de Gestion de Stock
+  </footer>
+</div>
+
+{% else %}
+<!-- Non-authenticated layout -->
+<div id="main-content" style="margin-left:0">
+  <main class="p-4">{% block content %}{% endblock %}</main>
+</div>
+{% endif %}
+
+<!-- ══════ TOAST CONTAINER ══════ -->
+<div id="toast-container"></div>
+
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// ── CSRF helper ──
+function getCookie(name) {
+  const val = `; ${document.cookie}`.split(`; ${name}=`);
+  if (val.length === 2) return val.pop().split(';').shift();
+}
+const CSRF = getCookie('csrftoken');
+
+function fetchJSON(url, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(r => r.json());
+}
+
+// ── Toast helper ──
+function showToast(msg, type='success') {
+  const id = 'toast-' + Date.now();
+  const icons = { success:'check-circle-fill', danger:'exclamation-triangle-fill', warning:'exclamation-circle-fill', info:'info-circle-fill' };
+  const html = `
+    <div id="${id}" class="toast align-items-center text-bg-${type} border-0 show" role="alert">
+      <div class="d-flex">
+        <div class="toast-body"><i class="bi bi-${icons[type]||'info-circle-fill'} me-2"></i>${msg}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>`;
+  document.getElementById('toast-container').insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById(id)?.remove(), 5000);
+}
+
+// ── Sidebar toggle (mobile) ──
+document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+// ── Low-stock notifications polling ──
+{% if user.is_authenticated %}
+function pollNotifications() {
+  fetch("{% url 'get_notifications' %}")
+    .then(r => r.json())
+    .then(data => {
+      const list = document.getElementById('notif-list');
+      const badge = document.getElementById('notif-count');
+      const empty = document.getElementById('notif-empty');
+      const notifs = data.notifications || [];
+
+      if (notifs.length > 0) {
+        badge.textContent = notifs.length;
+        badge.classList.remove('d-none');
+        empty.classList.add('d-none');
+        // Re-render list items
+        list.querySelectorAll('.notif-item').forEach(el => el.remove());
+        notifs.forEach(n => {
+          const li = document.createElement('li');
+          li.className = 'notif-item';
+          li.innerHTML = `
+            <div class="dropdown-item d-flex justify-content-between align-items-start py-2">
+              <div>
+                <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                <strong>${n.name}</strong> (${n.reference})<br>
+                <small class="text-muted">Stock critique : <strong>${n.quantity}</strong> unité(s)</small>
+              </div>
+              <button class="btn btn-sm btn-link text-muted p-0 ms-2" onclick="dismissNotif(${n.id}, this)">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <li class="dropdown-divider m-0"></li>`;
+          list.appendChild(li);
+        });
+      } else {
+        badge.classList.add('d-none');
+        empty.classList.remove('d-none');
+        list.querySelectorAll('.notif-item').forEach(el => el.remove());
+      }
+    })
+    .catch(() => {});
+}
+
+function dismissNotif(id, btn) {
+  fetchJSON(`/api/notifications/${id}/dismiss/`, 'POST')
+    .then(d => { if (d.success) pollNotifications(); });
+}
+
+pollNotifications();
+setInterval(pollNotifications, 60000); // poll every 60s
+{% endif %}
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
