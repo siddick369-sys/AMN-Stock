@@ -109,6 +109,10 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 # Low stock threshold
 LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
 
+# ── Groq AI ────────────────────────────────────────────────────────────────
+# Obtenir la clé sur https://console.groq.com/keys
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+
 # ── Green API (WhatsApp) ────────────────────────────────────────────────────
 # Obtenir les credentials sur https://console.green-api.com/
 GREENAPI_INSTANCE_ID = os.environ.get('GREENAPI_INSTANCE_ID', '')

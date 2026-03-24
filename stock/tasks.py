@@ -7,11 +7,13 @@ Chaque événement critique déclenche :
 
 Événements couverts
 -------------------
-  • check_low_stock          — planifié toutes les 30 min (Celery Beat)
-  • notify_low_stock_realtime — appelé à chaud quand une sortie fait tomber un item en stock faible
-  • whatsapp_discharge_created — décharge créée par un technicien
+  • check_low_stock               — planifié toutes les 30 min (Celery Beat)
+  • notify_low_stock_realtime     — appelé à chaud quand une sortie fait tomber un item en stock faible
+  • whatsapp_discharge_created    — décharge créée par un technicien
   • whatsapp_field_report_created — rapport de terrain soumis / mission clôturée
-  • send_hub_alert            — alerte manuelle Hub (équipements défectueux)
+  • send_hub_alert                — alerte manuelle Hub (équipements défectueux)
+  • ai_generate_summary           — génère un rapport IA via Groq et stocke en cache
+  • ai_generate_suggestions       — génère des suggestions IA via Groq et stocke en cache
 """
 
 import logging
@@ -336,3 +338,91 @@ def send_hub_alert(self, equipment_ids, user_id):
     except Exception as exc:
         logger.error("send_hub_alert : erreur inattendue : %s", exc)
         raise self.retry(exc=exc, countdown=30, max_retries=3)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 6. RAPPORT IA — résumé détaillé via Groq
+# ═══════════════════════════════════════════════════════════════════════
+
+@shared_task(bind=True, name='stock.tasks.ai_generate_summary')
+def ai_generate_summary(self, cache_key: str, days: int = 30):
+    """
+    Collecte toutes les données stock/décharges/rapports sur <days> jours,
+    appelle Groq pour générer un rapport Markdown, et stocke le résultat
+    dans le cache Django sous la clé <cache_key>.
+
+    Structure du cache :
+      {
+        "status":  "ready" | "error",
+        "content": "<markdown>",
+        "error":   "<message d'erreur si status==error>",
+        "generated_at": "<datetime str>"
+      }
+    """
+    from django.core.cache import cache
+    from .ai import build_stock_context, generate_summary
+
+    try:
+        logger.info("ai_generate_summary : collecte des données (jours=%d)…", days)
+        ctx = build_stock_context(days=days)
+
+        logger.info("ai_generate_summary : appel Groq…")
+        markdown = generate_summary(ctx)
+
+        result = {
+            "status": "ready",
+            "content": markdown,
+            "generated_at": ctx["generated_at"],
+            "period_days": days,
+            "stats": {
+                "total_equipment": ctx["total_equipment_types"],
+                "total_units": ctx["total_units_in_stock"],
+                "total_defective": ctx["total_defective"],
+                "low_stock_count": ctx["low_stock_count"],
+                "total_discharges": ctx["total_discharges"],
+                "total_reports": ctx["total_reports"],
+            },
+        }
+        cache.set(cache_key, result, timeout=7200)   # 2h
+        logger.info("ai_generate_summary : rapport stocké sous '%s'.", cache_key)
+        return "OK"
+
+    except Exception as exc:
+        logger.error("ai_generate_summary : erreur : %s", exc)
+        cache.set(cache_key, {"status": "error", "error": str(exc)}, timeout=600)
+        raise self.retry(exc=exc, countdown=60, max_retries=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 7. SUGGESTIONS IA — recommandations d'optimisation via Groq
+# ═══════════════════════════════════════════════════════════════════════
+
+@shared_task(bind=True, name='stock.tasks.ai_generate_suggestions')
+def ai_generate_suggestions(self, cache_key: str, days: int = 30):
+    """
+    Collecte toutes les données et appelle Groq pour générer des
+    recommandations d'optimisation priorisées. Stocke en cache.
+    """
+    from django.core.cache import cache
+    from .ai import build_stock_context, generate_suggestions
+
+    try:
+        logger.info("ai_generate_suggestions : collecte des données…")
+        ctx = build_stock_context(days=days)
+
+        logger.info("ai_generate_suggestions : appel Groq…")
+        markdown = generate_suggestions(ctx)
+
+        result = {
+            "status": "ready",
+            "content": markdown,
+            "generated_at": ctx["generated_at"],
+        }
+        cache.set(cache_key, result, timeout=7200)
+        logger.info("ai_generate_suggestions : suggestions stockées sous '%s'.", cache_key)
+        return "OK"
+
+    except Exception as exc:
+        logger.error("ai_generate_suggestions : erreur : %s", exc)
+        cache.set(cache_key, {"status": "error", "error": str(exc)}, timeout=600)
+        raise self.retry(exc=exc, countdown=60, max_retries=2)

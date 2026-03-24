@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rapport de Stock AMN — {{ generated_at }}</title>
+  <style>
+    /* ── xhtml2pdf compatible styles ── */
+    @page {
+      size: A4;
+      margin: 2cm 2cm 2.5cm 2cm;
+      @frame header_frame {
+        -pdf-frame-content: header_content;
+        left: 2cm; right: 2cm; top: 0.6cm; height: 1.4cm;
+      }
+      @frame footer_frame {
+        -pdf-frame-content: footer_content;
+        left: 2cm; right: 2cm; bottom: 0.5cm; height: 0.8cm;
+      }
+    }
+
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 10pt;
+      color: #1a1a2e;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER / FOOTER ── */
+    #header_content {
+      border-bottom: 2px solid #0d47a1;
+      padding-bottom: 4px;
+      display: table;
+      width: 100%;
+    }
+    #header_content .logo-cell { display: table-cell; width: 50%; vertical-align: middle; }
+    #header_content .date-cell  { display: table-cell; width: 50%; text-align: right; vertical-align: middle; color: #666; font-size: 8pt; }
+    #footer_content {
+      border-top: 1px solid #ccc;
+      text-align: center;
+      color: #888;
+      font-size: 7.5pt;
+      padding-top: 3px;
+    }
+
+    /* ── TITLE PAGE BLOCK ── */
+    .cover {
+      background: #0d47a1;
+      color: white;
+      padding: 20px 24px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .cover h1 { font-size: 18pt; margin: 0 0 4px 0; }
+    .cover .sub { font-size: 10pt; opacity: 0.85; margin: 0; }
+    .cover .meta { font-size: 8pt; opacity: 0.7; margin-top: 8px; }
+
+    /* ── STAT BOXES ── */
+    .stats-grid { display: table; width: 100%; margin-bottom: 18px; border-spacing: 6px; }
+    .stat-box {
+      display: table-cell;
+      width: 16%;
+      background: #e3f2fd;
+      border-left: 4px solid #0d47a1;
+      padding: 8px 10px;
+      text-align: center;
+      border-radius: 4px;
+    }
+    .stat-box.warn  { background: #fff3e0; border-left-color: #e65100; }
+    .stat-box.danger { background: #ffebee; border-left-color: #c62828; }
+    .stat-box .val  { font-size: 16pt; font-weight: bold; color: #0d47a1; display: block; }
+    .stat-box.warn  .val  { color: #e65100; }
+    .stat-box.danger .val { color: #c62828; }
+    .stat-box .lbl  { font-size: 7pt; color: #555; }
+
+    /* ── SECTION TITLES ── */
+    h2 {
+      font-size: 12pt;
+      color: #0d47a1;
+      border-bottom: 1.5px solid #0d47a1;
+      padding-bottom: 3px;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+    h3 { font-size: 10.5pt; color: #1565c0; margin: 12px 0 4px; }
+    h4 { font-size: 10pt;   color: #333;    margin: 8px 0 3px; }
+
+    /* ── BODY TEXT ── */
+    p  { margin: 4px 0 8px; }
+    ul { margin: 4px 0 8px 16px; padding: 0; }
+    li { margin-bottom: 3px; }
+    strong { color: #0d47a1; }
+
+    /* ── DIVIDER ── */
+    hr { border: none; border-top: 1px solid #ddd; margin: 14px 0; }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 8pt;
+      font-weight: bold;
+    }
+    .badge-urgent   { background: #ffcdd2; color: #b71c1c; }
+    .badge-important { background: #ffe0b2; color: #e65100; }
+    .badge-plan     { background: #fff9c4; color: #f57f17; }
+    .badge-continue { background: #c8e6c9; color: #1b5e20; }
+
+    /* ── NOTE BOX ── */
+    .ai-note {
+      background: #f3f4f6;
+      border-left: 4px solid #7c83fd;
+      padding: 8px 12px;
+      font-size: 8.5pt;
+      color: #444;
+      margin-bottom: 16px;
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ── PAGE BREAK ── */
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER (répété sur chaque page) ── -->
+<div id="header_content">
+  <div class="logo-cell">
+    <strong style="color:#0d47a1; font-size:11pt;">&#9679; AFRICA MOBILE NETWORKS</strong>
+    <span style="color:#888; font-size:8pt;"> — Système de Gestion de Stock</span>
+  </div>
+  <div class="date-cell">Généré le {{ generated_at }}</div>
+</div>
+
+<!-- ── FOOTER (répété sur chaque page) ── -->
+<div id="footer_content">
+  Rapport confidentiel AMN — Document généré automatiquement par l'IA (Groq / LLaMA 3.3) — {{ generated_at }}
+</div>
+
+<!-- ══════════════════════════════════════════
+     PAGE 1 — COUVERTURE + STATS + RAPPORT
+═══════════════════════════════════════════ -->
+
+<!-- Bloc de couverture -->
+<div class="cover">
+  <h1>Rapport de Gestion de Stock</h1>
+  <p class="sub">Analyse IA des activités — Période : {{ period_days }} derniers jours</p>
+  <p class="meta">Africa Mobile Networks (AMN) &nbsp;|&nbsp; Généré le {{ generated_at }}</p>
+</div>
+
+<!-- Note IA -->
+<div class="ai-note">
+  <strong>&#x1F916; Rapport généré par Intelligence Artificielle</strong> —
+  Ce document a été rédigé automatiquement par le modèle LLaMA 3.3 70B via Groq
+  à partir des données réelles de la base de données AMN Stock.
+  Période d'analyse : <strong>{{ period_days }} jours</strong>.
+</div>
+
+<!-- Statistiques globales -->
+{% if stats %}
+<div class="stats-grid">
+  <div class="stat-box">
+    <span class="val">{{ stats.total_equipment }}</span>
+    <span class="lbl">Types équipements</span>
+  </div>
+  <div class="stat-box">
+    <span class="val">{{ stats.total_units }}</span>
+    <span class="lbl">Unités en stock</span>
+  </div>
+  <div class="stat-box {% if stats.total_defective > 0 %}warn{% endif %}">
+    <span class="val">{{ stats.total_defective }}</span>
+    <span class="lbl">Défectueux</span>
+  </div>
+  <div class="stat-box {% if stats.low_stock_count > 0 %}danger{% endif %}">
+    <span class="val">{{ stats.low_stock_count }}</span>
+    <span class="lbl">Stock critique</span>
+  </div>
+  <div class="stat-box">
+    <span class="val">{{ stats.total_discharges }}</span>
+    <span class="lbl">Décharges</span>
+  </div>
+  <div class="stat-box">
+    <span class="val">{{ stats.total_reports }}</span>
+    <span class="lbl">Rapports terrain</span>
+  </div>
+</div>
+{% endif %}
+
+<hr>
+
+<!-- ── Contenu Markdown converti en HTML simple ── -->
+<!-- xhtml2pdf ne supporte pas le Markdown natif —
+     On affiche le texte brut mis en forme via CSS.
+     Pour le rendu Markdown complet, utiliser une bibliothèque
+     comme markdown2 (optionnel — intégré dans la vue si disponible). -->
+<div id="report-body">
+  {{ content_html|safe }}
+</div>
+
+</body>
+</html>

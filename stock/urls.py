@@ -30,4 +30,13 @@ urlpatterns = [
     path('discharges/<int:discharge_pk>/report/create/', views.field_report_create, name='field_report_create'),
     path('reports/', views.field_report_list, name='field_report_list'),
     path('reports/<int:pk>/', views.field_report_detail, name='field_report_detail'),
+
+    # AI — rapport & PDF
+    path('api/ai/analyse/', views.ai_trigger_summary, name='ai_trigger_summary'),
+    path('api/ai/status/<str:cache_key>/', views.ai_report_status, name='ai_report_status'),
+    path('api/ai/pdf/<str:cache_key>/', views.ai_generate_pdf, name='ai_generate_pdf'),
+
+    # AI — suggestions
+    path('api/ai/suggestions/', views.ai_trigger_suggestions, name='ai_trigger_suggestions'),
+    path('api/ai/suggestions/status/<str:cache_key>/', views.ai_suggestions_status, name='ai_suggestions_status'),
 ]

@@ -488,3 +488,139 @@ def field_report_list(request):
             discharge__user=request.user
         ).select_related('discharge__user')
     return render(request, 'stock/field_report_list.html', {'reports': reports})
+
+
+# ─────────────────────────────────────────────
+# AI — RAPPORT (résumé + PDF)
+# ─────────────────────────────────────────────
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def ai_trigger_summary(request):
+    """Lance la tâche Celery de génération du rapport IA. Retourne le cache_key."""
+    import uuid
+    from django.core.cache import cache
+    from .tasks import ai_generate_summary
+
+    cache_key = f'ai_report_{request.user.id}_{uuid.uuid4().hex[:8]}'
+    # Marquer comme "en cours" immédiatement pour que le frontend sache
+    cache.set(cache_key, {'status': 'pending'}, timeout=600)
+    ai_generate_summary.delay(cache_key, days=30)
+    return JsonResponse({'success': True, 'cache_key': cache_key})
+
+
+@login_required
+@user_passes_test(is_admin)
+def ai_report_status(request, cache_key):
+    """Poll : retourne l'état du rapport IA depuis le cache."""
+    from django.core.cache import cache
+    data = cache.get(cache_key)
+    if data is None:
+        return JsonResponse({'status': 'expired'})
+    return JsonResponse(data)
+
+
+@login_required
+@user_passes_test(is_admin)
+def ai_generate_pdf(request, cache_key):
+    """Génère et retourne le rapport IA en PDF via xhtml2pdf."""
+    from io import BytesIO
+    from django.core.cache import cache
+    from django.template.loader import render_to_string
+    from xhtml2pdf import pisa
+
+    data = cache.get(cache_key)
+    if not data or data.get('status') != 'ready':
+        return JsonResponse({'error': 'Rapport non disponible. Relancez l\'analyse.'}, status=404)
+
+    # Convert Markdown → HTML for xhtml2pdf
+    try:
+        import re
+        md = data['content']
+        # Headers
+        md = re.sub(r'^### (.+)$', r'<h3>\1</h3>', md, flags=re.MULTILINE)
+        md = re.sub(r'^## (.+)$',  r'<h2>\1</h2>', md, flags=re.MULTILINE)
+        md = re.sub(r'^# (.+)$',   r'<h2>\1</h2>', md, flags=re.MULTILINE)
+        # Bold / italic
+        md = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', md)
+        md = re.sub(r'\*(.+?)\*',     r'<em>\1</em>',         md)
+        md = re.sub(r'_(.+?)_',       r'<em>\1</em>',         md)
+        # Bullet lists — group consecutive lines starting with - or •
+        lines = md.split('\n')
+        html_lines = []
+        in_list = False
+        for line in lines:
+            stripped = line.strip()
+            is_item = stripped.startswith('- ') or stripped.startswith('• ')
+            if is_item:
+                if not in_list:
+                    html_lines.append('<ul>')
+                    in_list = True
+                text = stripped[2:].strip()
+                html_lines.append(f'<li>{text}</li>')
+            else:
+                if in_list:
+                    html_lines.append('</ul>')
+                    in_list = False
+                if stripped == '---' or stripped == '***':
+                    html_lines.append('<hr>')
+                elif stripped == '':
+                    html_lines.append('<br>')
+                else:
+                    html_lines.append(f'<p>{line}</p>')
+        if in_list:
+            html_lines.append('</ul>')
+        content_html = '\n'.join(html_lines)
+    except Exception:
+        content_html = f"<pre>{data['content']}</pre>"
+
+    html_string = render_to_string('stock/report_pdf.html', {
+        'content_html': content_html,
+        'generated_at': data.get('generated_at', ''),
+        'period_days': data.get('period_days', 30),
+        'stats': data.get('stats', {}),
+    })
+
+    pdf_buffer = BytesIO()
+    pisa_status = pisa.CreatePDF(html_string, dest=pdf_buffer, encoding='utf-8')
+
+    if pisa_status.err:
+        return JsonResponse({'error': 'Erreur lors de la génération du PDF.'}, status=500)
+
+    from django.http import HttpResponse
+    from django.utils import timezone as tz
+    filename = f"AMN_Rapport_Stock_{tz.now().strftime('%Y%m%d_%H%M')}.pdf"
+    response = HttpResponse(pdf_buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ─────────────────────────────────────────────
+# AI — SUGGESTIONS
+# ─────────────────────────────────────────────
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def ai_trigger_suggestions(request):
+    """Lance la tâche Celery de génération des suggestions IA."""
+    import uuid
+    from django.core.cache import cache
+    from .tasks import ai_generate_suggestions
+
+    cache_key = f'ai_suggestions_{request.user.id}_{uuid.uuid4().hex[:8]}'
+    cache.set(cache_key, {'status': 'pending'}, timeout=600)
+    ai_generate_suggestions.delay(cache_key, days=30)
+    return JsonResponse({'success': True, 'cache_key': cache_key})
+
+
+@login_required
+@user_passes_test(is_admin)
+def ai_suggestions_status(request, cache_key):
+    """Poll : retourne l'état des suggestions IA depuis le cache."""
+    from django.core.cache import cache
+    data = cache.get(cache_key)
+    if data is None:
+        return JsonResponse({'status': 'expired'})
+    return JsonResponse(data)

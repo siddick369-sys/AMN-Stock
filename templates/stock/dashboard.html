@@ -5,6 +5,48 @@
 {% block extra_css %}
 <style>
   .action-btn { padding: .2rem .55rem; font-size: .8rem; }
+
+  /* ── AI Report Rendering ── */
+  .ai-report-body { font-size: .92rem; line-height: 1.75; color: #1a1a2e; }
+  .ai-report-body h1,
+  .ai-report-body h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0d47a1;
+    border-bottom: 2px solid #e3f2fd;
+    padding-bottom: .3rem;
+    margin: 1.4rem 0 .6rem;
+  }
+  .ai-report-body h3 {
+    font-size: .97rem;
+    font-weight: 600;
+    color: #1565c0;
+    margin: 1rem 0 .4rem;
+  }
+  .ai-report-body h4 {
+    font-size: .92rem;
+    font-weight: 600;
+    color: #333;
+    margin: .8rem 0 .3rem;
+  }
+  .ai-report-body p { margin: .35rem 0 .7rem; }
+  .ai-report-body ul { padding-left: 1.4rem; margin: .35rem 0 .7rem; }
+  .ai-report-body li { margin-bottom: .25rem; }
+  .ai-report-body strong { color: #0d47a1; }
+  .ai-report-body em { color: #555; }
+  .ai-report-body hr { border: none; border-top: 1px solid #dee2e6; margin: 1rem 0; }
+  .ai-report-body code {
+    background: #f3f4f6;
+    padding: .1rem .35rem;
+    border-radius: 4px;
+    font-size: .85rem;
+    color: #c0392b;
+  }
+  /* Priority badges in suggestions */
+  .ai-report-body .badge-urgent    { background:#ffcdd2; color:#b71c1c; padding:1px 7px; border-radius:10px; font-size:.78rem; font-weight:600; }
+  .ai-report-body .badge-important { background:#ffe0b2; color:#e65100; padding:1px 7px; border-radius:10px; font-size:.78rem; font-weight:600; }
+  .ai-report-body .badge-plan      { background:#fff9c4; color:#f57f17; padding:1px 7px; border-radius:10px; font-size:.78rem; font-weight:600; }
+  .ai-report-body .badge-ok        { background:#c8e6c9; color:#1b5e20; padding:1px 7px; border-radius:10px; font-size:.78rem; font-weight:600; }
 </style>
 {% endblock %}
 
@@ -142,7 +184,7 @@
 </div>
 
 <!-- ── Chart ── -->
-<div class="card table-card">
+<div class="card table-card mb-4">
   <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center justify-content-between py-3 px-4">
     <h6 class="mb-0 fw-semibold"><i class="bi bi-bar-chart-line me-2"></i>Évolution du stock</h6>
     <div class="btn-group btn-group-sm" id="chart-period">
@@ -156,6 +198,124 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════════════
+     PANNEAU IA
+═════════════════════════════════════════ -->
+<div class="card table-card mb-4" id="ai-panel">
+  <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center justify-content-between py-3 px-4">
+    <div class="d-flex align-items-center gap-2">
+      <span style="font-size:1.3rem">🤖</span>
+      <div>
+        <h6 class="mb-0 fw-semibold">Analyse & Rapport Intelligent</h6>
+        <small class="text-muted">Propulsé par Groq / LLaMA 3.3 — analyse les 30 derniers jours</small>
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap" id="ai-action-btns">
+      <!-- Bouton Analyse IA -->
+      <button class="btn btn-sm btn-primary" id="btn-analyse" onclick="launchAiSummary()">
+        <i class="bi bi-cpu me-1"></i>Analyse IA
+      </button>
+      <!-- Bouton Générer PDF — caché jusqu'à ce que l'analyse soit prête -->
+      <a class="btn btn-sm btn-success d-none" id="btn-pdf" href="#" target="_blank">
+        <i class="bi bi-file-earmark-pdf-fill me-1"></i>Générer PDF
+      </a>
+      <!-- Bouton Suggestions IA -->
+      <button class="btn btn-sm btn-warning" id="btn-suggest" onclick="launchAiSuggestions()">
+        <i class="bi bi-lightbulb me-1"></i>Suggestions IA
+      </button>
+    </div>
+  </div>
+
+  <div class="card-body p-4">
+    <!-- État initial -->
+    <div id="ai-idle" class="text-center py-4 text-muted">
+      <i class="bi bi-robot display-4 d-block mb-3 text-primary opacity-50"></i>
+      <p class="mb-1 fw-semibold">Assistant IA prêt</p>
+      <p class="small">Cliquez sur <strong>Analyse IA</strong> pour générer un rapport détaillé de vos stocks,<br>
+      décharges et équipements défectueux.<br>
+      Utilisez <strong>Suggestions IA</strong> pour obtenir des recommandations d'optimisation.</p>
+    </div>
+
+    <!-- Loader -->
+    <div id="ai-loading" class="text-center py-5 d-none">
+      <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;"></div>
+      <p class="fw-semibold text-primary mb-1" id="ai-loading-msg">Analyse en cours…</p>
+      <p class="text-muted small">L'IA collecte et analyse vos données. Cela prend 15 à 45 secondes.</p>
+      <div class="progress mt-3 mx-auto" style="max-width:300px;height:6px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary w-100"></div>
+      </div>
+    </div>
+
+    <!-- Résultat Rapport IA -->
+    <div id="ai-result" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+        <div>
+          <span class="badge bg-success me-2"><i class="bi bi-check-circle-fill me-1"></i>Analyse complète</span>
+          <small class="text-muted" id="ai-generated-at"></small>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="resetAiPanel()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Nouvelle analyse
+        </button>
+      </div>
+      <!-- Contenu Markdown rendu -->
+      <div id="ai-content" class="ai-report-body"></div>
+    </div>
+
+    <!-- Erreur -->
+    <div id="ai-error" class="d-none">
+      <div class="alert alert-danger d-flex align-items-center gap-2 mb-0">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div>
+          <strong>Erreur lors de l'analyse IA</strong>
+          <div class="small mt-1" id="ai-error-msg"></div>
+          <button class="btn btn-sm btn-danger mt-2" onclick="resetAiPanel()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Réessayer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Suggestions IA -->
+<div class="modal fade" id="suggestionsModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff;">
+        <h5 class="modal-title">
+          <i class="bi bi-lightbulb-fill me-2"></i>Suggestions IA — Optimisation du stock
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <!-- Loader suggestions -->
+        <div id="sug-loading" class="text-center py-5">
+          <div class="spinner-border text-warning mb-3" role="status" style="width:3rem;height:3rem;"></div>
+          <p class="fw-semibold text-warning mb-1">L'IA analyse vos flux et formule des recommandations…</p>
+          <p class="text-muted small">Analyse profonde des patterns de stock, décharges et retours.</p>
+          <div class="progress mt-3 mx-auto" style="max-width:300px;height:6px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
+          </div>
+        </div>
+        <!-- Résultat suggestions -->
+        <div id="sug-result" class="d-none ai-report-body"></div>
+        <!-- Erreur suggestions -->
+        <div id="sug-error" class="d-none">
+          <div class="alert alert-danger mb-0">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>Erreur :</strong> <span id="sug-error-msg"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <small class="text-muted me-auto">
+          <i class="bi bi-robot me-1"></i>Généré par LLaMA 3.3 via Groq — <span id="sug-generated-at"></span>
+        </small>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ════════════════════════════════════════
      MODALS
@@ -618,6 +778,219 @@ function updateTotal(addQty) {
   const el = document.getElementById('total-units');
   const cur = parseInt(el.textContent.replace(/\s/g, '')) || 0;
   el.textContent = (cur + addQty).toLocaleString('fr-FR');
+}
+</script>
+
+<!-- ════════════════════════════════════
+     JAVASCRIPT — MODULE IA
+═════════════════════════════════════ -->
+<script>
+// ── État global ───────────────────────────────────────────────────
+const AI = {
+  summaryKey:     null,   // cache_key du rapport en cours
+  suggestKey:     null,   // cache_key des suggestions en cours
+  summaryTimer:   null,
+  suggestTimer:   null,
+  POLL_INTERVAL:  3000,   // ms entre chaque poll
+};
+
+// ── Convertisseur Markdown → HTML (rendu dans le navigateur) ──────
+function mdToHtml(md) {
+  if (!md) return '';
+  let h = md
+    // Titres
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,    '<h2>$1</h2>')
+    // Gras / italique
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,      '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,          '<em>$1</em>')
+    .replace(/_([^_]+)_/g,          '<em>$1</em>')
+    // Code inline
+    .replace(/`([^`]+)`/g,          '<code>$1</code>')
+    // Séparateurs
+    .replace(/^---+$/gm,            '<hr>')
+    .replace(/^\*\*\*+$/gm,         '<hr>');
+
+  // Listes à puces (•, -, *)
+  const lines = h.split('\n');
+  const out = [];
+  let inList = false;
+  for (const line of lines) {
+    const stripped = line.trim();
+    const isBullet = /^[-•*]\s+/.test(stripped);
+    if (isBullet) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      const text = stripped.replace(/^[-•*]\s+/, '');
+      out.push(`<li>${text}</li>`);
+    } else {
+      if (inList) { out.push('</ul>'); inList = false; }
+      if (stripped === '') out.push('');
+      else out.push(stripped.startsWith('<') ? stripped : `<p>${stripped}</p>`);
+    }
+  }
+  if (inList) out.push('</ul>');
+
+  return out.join('\n');
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────
+function showAiState(state) {
+  ['ai-idle','ai-loading','ai-result','ai-error'].forEach(id =>
+    document.getElementById(id)?.classList.add('d-none')
+  );
+  document.getElementById(`ai-${state}`)?.classList.remove('d-none');
+}
+
+function setLoadingMsg(msg) {
+  const el = document.getElementById('ai-loading-msg');
+  if (el) el.textContent = msg;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FLUX 1 — RAPPORT (Analyse IA + PDF)
+// ════════════════════════════════════════════════════════════════════
+
+function launchAiSummary() {
+  // Désactiver les boutons pendant l'analyse
+  document.getElementById('btn-analyse').disabled = true;
+  document.getElementById('btn-suggest').disabled = true;
+  document.getElementById('btn-pdf').classList.add('d-none');
+
+  showAiState('loading');
+  setLoadingMsg('Collecte des données de stock…');
+
+  fetchJSON('/api/ai/analyse/', 'POST')
+    .then(res => {
+      if (!res.success) {
+        showAiError(res.error || 'Erreur lors du lancement de l\'analyse.');
+        return;
+      }
+      AI.summaryKey = res.cache_key;
+      setLoadingMsg('Analyse IA en cours (Groq / LLaMA 3.3)…');
+      AI.summaryTimer = setInterval(pollSummaryStatus, AI.POLL_INTERVAL);
+    })
+    .catch(err => showAiError('Impossible de contacter le serveur : ' + err));
+}
+
+function pollSummaryStatus() {
+  if (!AI.summaryKey) return;
+  fetch(`/api/ai/status/${AI.summaryKey}/`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'pending') {
+        setLoadingMsg('Rédaction du rapport en cours…');
+        return;
+      }
+      clearInterval(AI.summaryTimer);
+      AI.summaryTimer = null;
+
+      if (data.status === 'ready') {
+        renderSummary(data);
+      } else if (data.status === 'error') {
+        showAiError(data.error || 'Erreur inconnue lors de la génération.');
+      } else if (data.status === 'expired') {
+        showAiError('La session a expiré. Veuillez relancer l\'analyse.');
+      }
+    })
+    .catch(() => setLoadingMsg('En attente de la réponse IA…'));
+}
+
+function renderSummary(data) {
+  document.getElementById('ai-content').innerHTML = mdToHtml(data.content || '');
+  document.getElementById('ai-generated-at').textContent = data.generated_at || '';
+  showAiState('result');
+
+  // Afficher "Générer PDF", cacher "Analyse IA"
+  document.getElementById('btn-analyse').classList.add('d-none');
+  document.getElementById('btn-pdf').href = `/api/ai/pdf/${AI.summaryKey}/`;
+  document.getElementById('btn-pdf').classList.remove('d-none');
+  document.getElementById('btn-suggest').disabled = false;
+
+  showToast('Rapport IA généré avec succès !', 'success');
+}
+
+function showAiError(msg) {
+  clearInterval(AI.summaryTimer);
+  AI.summaryTimer = null;
+  document.getElementById('ai-error-msg').textContent = msg;
+  showAiState('error');
+  document.getElementById('btn-analyse').disabled = false;
+  document.getElementById('btn-suggest').disabled = false;
+  showToast('Erreur IA : ' + msg, 'danger');
+}
+
+function resetAiPanel() {
+  clearInterval(AI.summaryTimer);
+  AI.summaryKey = null;
+  document.getElementById('btn-analyse').disabled  = false;
+  document.getElementById('btn-analyse').classList.remove('d-none');
+  document.getElementById('btn-pdf').classList.add('d-none');
+  document.getElementById('btn-suggest').disabled = false;
+  showAiState('idle');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FLUX 2 — SUGGESTIONS IA
+// ════════════════════════════════════════════════════════════════════
+
+function launchAiSuggestions() {
+  // Ouvrir le modal immédiatement avec le loader
+  document.getElementById('sug-loading').classList.remove('d-none');
+  document.getElementById('sug-result').classList.add('d-none');
+  document.getElementById('sug-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('suggestionsModal')).show();
+
+  document.getElementById('btn-suggest').disabled = true;
+
+  fetchJSON('/api/ai/suggestions/', 'POST')
+    .then(res => {
+      if (!res.success) {
+        showSugError(res.error || 'Erreur lors du lancement.');
+        return;
+      }
+      AI.suggestKey = res.cache_key;
+      AI.suggestTimer = setInterval(pollSuggestionsStatus, AI.POLL_INTERVAL);
+    })
+    .catch(err => showSugError('Impossible de contacter le serveur : ' + err));
+}
+
+function pollSuggestionsStatus() {
+  if (!AI.suggestKey) return;
+  fetch(`/api/ai/suggestions/status/${AI.suggestKey}/`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'pending') return;
+
+      clearInterval(AI.suggestTimer);
+      AI.suggestTimer = null;
+      document.getElementById('btn-suggest').disabled = false;
+
+      if (data.status === 'ready') {
+        renderSuggestions(data);
+      } else {
+        showSugError(data.error || 'Erreur lors de la génération des suggestions.');
+      }
+    })
+    .catch(() => {});
+}
+
+function renderSuggestions(data) {
+  const el = document.getElementById('sug-result');
+  el.innerHTML = mdToHtml(data.content || '');
+  document.getElementById('sug-generated-at').textContent = data.generated_at || '';
+  document.getElementById('sug-loading').classList.add('d-none');
+  el.classList.remove('d-none');
+  showToast('Suggestions IA prêtes !', 'success');
+}
+
+function showSugError(msg) {
+  document.getElementById('sug-loading').classList.add('d-none');
+  document.getElementById('sug-error-msg').textContent = msg;
+  document.getElementById('sug-error').classList.remove('d-none');
+  document.getElementById('btn-suggest').disabled = false;
 }
 </script>
 {% endblock %}
