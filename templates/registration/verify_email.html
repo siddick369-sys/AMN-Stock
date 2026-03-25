@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vérification du compte — AMN Stock</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #e65100 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .auth-card {
+      width: 100%; max-width: 440px;
+      border: none; border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .auth-header {
+      background: #0d47a1; color: #fff;
+      border-radius: 16px 16px 0 0; padding: 1.75rem 2rem; text-align: center;
+    }
+    .auth-header .logo-circle {
+      width: 66px; height: 66px; background: rgba(255,255,255,.15); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto .9rem; font-size: 1.8rem;
+    }
+
+    /* ── OTP input grid ── */
+    .otp-grid {
+      display: flex; gap: .6rem; justify-content: center;
+    }
+    .otp-digit {
+      width: 52px; height: 64px;
+      font-size: 1.8rem; font-weight: 700; text-align: center;
+      border: 2px solid #dee2e6; border-radius: 10px;
+      outline: none; transition: border-color .2s, box-shadow .2s;
+      caret-color: #0d47a1;
+    }
+    .otp-digit:focus {
+      border-color: #0d47a1;
+      box-shadow: 0 0 0 3px rgba(13,71,161,.2);
+    }
+    .otp-digit.filled { border-color: #0d47a1; background: #e3f2fd; }
+    .otp-digit.error  { border-color: #f44336; background: #fce4ec; }
+    .otp-digit.success{ border-color: #4caf50; background: #e8f5e9; }
+
+    /* ── Countdown ── */
+    .countdown-wrap { font-size: .88rem; }
+    #resend-countdown { font-variant-numeric: tabular-nums; font-weight: 700; color: #0d47a1; }
+
+    .btn-amn      { background: #0d47a1; border-color: #0d47a1; color: #fff; }
+    .btn-amn:hover{ background: #1565c0; border-color: #1565c0; color: #fff; }
+
+    /* email mask */
+    .email-mask { font-weight: 600; color: #0d47a1; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="auth-card card">
+    <div class="auth-header">
+      <div class="logo-circle"><i class="bi bi-envelope-check-fill"></i></div>
+      <h4 class="mb-1 fw-bold">Vérification du compte</h4>
+      <p class="mb-0 opacity-75 small">
+        Code envoyé à <span class="fw-semibold">{{ email|slice:":3" }}****{{ email|slice:"-6:" }}</span>
+      </p>
+    </div>
+
+    <div class="card-body p-4">
+
+      {% if messages %}
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} py-2 small">
+        <i class="bi bi-{% if message.tags == 'success' %}check-circle-fill{% elif message.tags == 'warning' %}exclamation-circle-fill{% else %}x-circle-fill{% endif %} me-1"></i>
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <p class="text-muted small text-center mb-4">
+        Entrez le code à <strong>6 chiffres</strong> reçu par email.<br>
+        <span class="text-warning small">
+          <i class="bi bi-clock me-1"></i>Valable <strong>10 minutes</strong>.
+        </span>
+      </p>
+
+      <form method="post" id="verify-form" novalidate>
+        {% csrf_token %}
+
+        <!-- ── OTP digits ── -->
+        <div class="otp-grid mb-4" id="otp-grid">
+          <input class="otp-digit" type="text" name="d1" id="d1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+          <input class="otp-digit" type="text" name="d2" id="d2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input class="otp-digit" type="text" name="d3" id="d3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input class="otp-digit" type="text" name="d4" id="d4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input class="otp-digit" type="text" name="d5" id="d5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input class="otp-digit" type="text" name="d6" id="d6" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        </div>
+
+        <button type="submit" class="btn btn-amn w-100 fw-semibold py-2 mb-3" id="verify-btn">
+          <i class="bi bi-shield-check me-2"></i>Vérifier mon compte
+        </button>
+      </form>
+
+      <!-- ── Resend section ── -->
+      <div class="text-center countdown-wrap">
+        <span class="text-muted">Vous n'avez pas reçu le code ?</span><br>
+        {% if seconds_until_resend and seconds_until_resend > 0 %}
+        <span class="text-muted small">
+          Renvoi disponible dans <span id="resend-countdown">{{ seconds_until_resend }}</span> s
+        </span><br>
+        {% endif %}
+        <a href="{% url 'resend_verification' %}"
+           id="resend-link"
+           class="btn btn-sm btn-outline-primary mt-2 {% if seconds_until_resend and seconds_until_resend > 0 %}disabled{% endif %}"
+           {% if seconds_until_resend and seconds_until_resend > 0 %}aria-disabled="true"{% endif %}>
+          <i class="bi bi-arrow-repeat me-1"></i>Renvoyer le code
+        </a>
+      </div>
+
+      <hr class="my-3">
+      <p class="text-center text-muted small mb-0">
+        Mauvais compte ?
+        <a href="{% url 'register' %}" class="fw-semibold text-decoration-none">Créer un autre compte</a>
+      </p>
+    </div>
+
+    <div class="card-footer text-center text-muted small py-3 border-0">
+      &copy; {% now "Y" %} Africa Mobile Networks
+    </div>
+  </div>
+
+  <script>
+  /* ── OTP auto-advance ── */
+  const digits = Array.from(document.querySelectorAll('.otp-digit'));
+
+  digits.forEach((inp, idx) => {
+    inp.addEventListener('input', function(e) {
+      // Accept only one digit
+      this.value = this.value.replace(/[^0-9]/g, '').slice(-1);
+      this.classList.toggle('filled', this.value !== '');
+      if (this.value && idx < digits.length - 1) digits[idx + 1].focus();
+      // Auto-submit when all filled
+      if (digits.every(d => d.value !== '')) {
+        document.getElementById('verify-form').submit();
+      }
+    });
+
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Backspace' && !this.value && idx > 0) {
+        digits[idx - 1].value = '';
+        digits[idx - 1].classList.remove('filled');
+        digits[idx - 1].focus();
+      }
+      // Allow paste on first digit
+    });
+
+    inp.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
+      pasted.split('').slice(0, 6).forEach((ch, i) => {
+        if (digits[i]) {
+          digits[i].value = ch;
+          digits[i].classList.add('filled');
+        }
+      });
+      const next = digits[Math.min(pasted.length, 5)];
+      if (next) next.focus();
+      if (digits.every(d => d.value !== '')) document.getElementById('verify-form').submit();
+    });
+  });
+
+  // Focus first empty or first digit on load
+  (digits.find(d => !d.value) || digits[0])?.focus();
+
+  /* ── Countdown timer ── */
+  let countdown = {{ seconds_until_resend|default:0 }};
+  const countdownEl = document.getElementById('resend-countdown');
+  const resendLink  = document.getElementById('resend-link');
+
+  if (countdown > 0 && countdownEl) {
+    const interval = setInterval(() => {
+      countdown--;
+      countdownEl.textContent = countdown;
+      if (countdown <= 0) {
+        clearInterval(interval);
+        countdownEl.closest('span')?.remove();
+        resendLink?.classList.remove('disabled');
+        resendLink?.removeAttribute('aria-disabled');
+      }
+    }, 1000);
+  }
+
+  /* ── Mark error digits on load if there were errors ── */
+  {% if messages %}
+  {% for message in messages %}{% if message.tags == 'error' %}
+  digits.forEach(d => d.classList.add('error'));
+  setTimeout(() => digits.forEach(d => { d.classList.remove('error'); d.value = ''; d.classList.remove('filled'); }), 1200);
+  setTimeout(() => digits[0].focus(), 1200);
+  {% endif %}{% endfor %}
+  {% endif %}
+  </script>
+</body>
+</html>

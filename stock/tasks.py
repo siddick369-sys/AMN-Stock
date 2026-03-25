@@ -426,3 +426,50 @@ def ai_generate_suggestions(self, cache_key: str, days: int = 30):
         logger.error("ai_generate_suggestions : erreur : %s", exc)
         cache.set(cache_key, {"status": "error", "error": str(exc)}, timeout=600)
         raise self.retry(exc=exc, countdown=60, max_retries=2)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VÉRIFICATION EMAIL — CODE OTP
+# ─────────────────────────────────────────────────────────────────────────────
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_email(self, user_id: int, code: str):
+    """
+    Envoie l'email de vérification du compte (code OTP 6 chiffres).
+    Retries automatiques : 3 × 60 secondes en cas d'échec SMTP.
+    """
+    try:
+        from django.core.mail import EmailMultiAlternatives
+        from django.template.loader import render_to_string
+
+        user = User.objects.get(pk=user_id)
+
+        subject = "[AMN Stock] Vérification de votre compte"
+        text_body = (
+            f"Bonjour {user.get_full_name() or user.username},\n\n"
+            f"Votre code de vérification AMN Stock est :\n\n"
+            f"    {code}\n\n"
+            f"Ce code est valable 10 minutes.\n\n"
+            f"Si vous n'avez pas créé de compte, ignorez cet email.\n\n"
+            f"— Africa Mobile Networks"
+        )
+        html_body = render_to_string('emails/verification.html', {
+            'user': user,
+            'code': code,
+        })
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
+        logger.info("send_verification_email : code envoyé à %s (user=%d)", user.email, user_id)
+
+    except User.DoesNotExist:
+        logger.error("send_verification_email : user_id=%d introuvable", user_id)
+    except Exception as exc:
+        logger.error("send_verification_email : échec SMTP pour user_id=%d : %s", user_id, exc)
+        raise self.retry(exc=exc)

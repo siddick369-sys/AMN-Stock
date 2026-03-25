@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code de vérification AMN Stock</title>
+  <style>
+    body    { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrap   { max-width: 540px; margin: 32px auto; background: #fff; border-radius: 12px;
+              box-shadow: 0 4px 20px rgba(0,0,0,.1); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #0d47a1, #1565c0);
+              color: #fff; padding: 32px; text-align: center; }
+    .header .logo-circle {
+      width: 72px; height: 72px; background: rgba(255,255,255,.15); border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 2.2rem; margin-bottom: 12px;
+    }
+    .header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+    .header p  { margin: 4px 0 0; opacity: .8; font-size: .9rem; }
+    .body      { padding: 36px 32px; }
+    .body p    { color: #444; line-height: 1.7; font-size: .95rem; margin: 0 0 16px; }
+    .code-box  {
+      background: #e3f2fd; border: 2px dashed #0d47a1; border-radius: 12px;
+      padding: 24px; text-align: center; margin: 24px 0;
+    }
+    .code-box .label { color: #555; font-size: .82rem; text-transform: uppercase;
+                       letter-spacing: .1em; margin-bottom: 8px; }
+    .code-box .code  {
+      font-size: 3rem; font-weight: 900; letter-spacing: .35em;
+      color: #0d47a1; font-family: 'Courier New', monospace;
+      display: block;
+    }
+    .expiry    { background: #fff8e1; border-left: 4px solid #ffc107; border-radius: 6px;
+                 padding: 10px 14px; font-size: .85rem; color: #664d03; margin: 0 0 20px; }
+    .divider   { border: none; border-top: 1px solid #e0e0e0; margin: 24px 0; }
+    .footer    { background: #f8f9fa; padding: 20px 32px; text-align: center;
+                 color: #888; font-size: .8rem; }
+    .footer a  { color: #0d47a1; text-decoration: none; }
+    .security-note { background: #fce4ec; border-radius: 8px; padding: 12px 16px;
+                     font-size: .83rem; color: #b71c1c; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="header">
+      <div class="logo-circle">📱</div>
+      <h1>AMN Stock</h1>
+      <p>Africa Mobile Networks — Gestion de Stock</p>
+    </div>
+
+    <div class="body">
+      <p>Bonjour <strong>{{ user.get_full_name|default:user.username }}</strong>,</p>
+      <p>
+        Vous venez de créer un compte sur <strong>AMN Stock</strong>.
+        Pour finaliser votre inscription, entrez le code ci-dessous sur la page de vérification.
+      </p>
+
+      <div class="code-box">
+        <div class="label">Votre code de vérification</div>
+        <span class="code">{{ code }}</span>
+      </div>
+
+      <div class="expiry">
+        <strong>⏰ Attention :</strong> Ce code est valable pendant <strong>10 minutes</strong> seulement.
+      </div>
+
+      <p>Si vous rencontrez des difficultés, vous pouvez demander un nouveau code depuis la page de vérification.</p>
+
+      <div class="security-note">
+        <strong>🔒 Sécurité :</strong> AMN Stock ne vous demandera jamais votre code de vérification par téléphone,
+        email ou message. Ne communiquez ce code à personne.
+        Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.
+      </div>
+
+      <hr class="divider">
+      <p style="color:#888; font-size:.85rem; margin:0;">
+        Cet email a été envoyé automatiquement. Merci de ne pas y répondre.
+      </p>
+    </div>
+
+    <div class="footer">
+      &copy; {% now "Y" %} Africa Mobile Networks &nbsp;·&nbsp;
+      Système de Gestion de Stock
+    </div>
+
+  </div>
+</body>
+</html>

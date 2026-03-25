@@ -115,3 +115,43 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f"{self.get_movement_type_display()} - {self.equipment.name} x{self.quantity}"
+
+
+class EmailVerification(models.Model):
+    """
+    Vérification d'email lors de l'auto-inscription.
+    Code OTP 6 chiffres valable 10 minutes.
+    Compte à rebours de 2 minutes avant de pouvoir renvoyer un code.
+    Max 5 tentatives incorrectes avant blocage.
+    """
+    user          = models.OneToOneField(User, on_delete=models.CASCADE, related_name='email_verification')
+    code          = models.CharField(max_length=6)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    expires_at    = models.DateTimeField()
+    attempts      = models.PositiveSmallIntegerField(default=0)   # tentatives incorrectes
+    last_resend_at = models.DateTimeField(null=True, blank=True)  # dernier renvoi
+    resend_count  = models.PositiveSmallIntegerField(default=0)   # nombre de renvois
+
+    RESEND_DELAY  = 120   # secondes avant de pouvoir renvoyer
+    MAX_ATTEMPTS  = 5     # tentatives incorrectes avant blocage
+
+    class Meta:
+        verbose_name = "Vérification email"
+
+    def __str__(self):
+        return f"Vérif. {self.user.username} (exp. {self.expires_at:%H:%M})"
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def can_resend(self):
+        if not self.last_resend_at:
+            return True
+        elapsed = (timezone.now() - self.last_resend_at).total_seconds()
+        return elapsed >= self.RESEND_DELAY
+
+    def seconds_until_resend(self):
+        if not self.last_resend_at:
+            return 0
+        elapsed = (timezone.now() - self.last_resend_at).total_seconds()
+        return max(0, int(self.RESEND_DELAY - elapsed))
