@@ -624,3 +624,45 @@ def ai_suggestions_status(request, cache_key):
     if data is None:
         return JsonResponse({'status': 'expired'})
     return JsonResponse(data)
+
+
+# ─────────────────────────────────────────────
+# ASSISTANT VOCAL IA — DÉCHARGE
+# ─────────────────────────────────────────────
+
+@login_required
+@require_POST
+def voice_process_discharge(request):
+    """
+    Reçoit un fichier audio (multipart), le transcrit avec Groq Whisper,
+    extrait la destination et les équipements avec LLaMA, retourne un JSON
+    structuré que le JS côté client utilisera pour remplir le formulaire.
+
+    Accessible à tous les utilisateurs authentifiés (techniciens inclus).
+    """
+    from .voice import process_voice_discharge
+    from .models import Equipment
+
+    audio_file = request.FILES.get('audio')
+    if not audio_file:
+        return JsonResponse({'error': 'Aucun fichier audio reçu.'}, status=400)
+
+    # Limite de taille : 25 Mo (limite Groq Whisper)
+    max_size = 25 * 1024 * 1024
+    if audio_file.size > max_size:
+        return JsonResponse({'error': 'Fichier audio trop volumineux (max 25 Mo).'}, status=400)
+
+    audio_bytes = audio_file.read()
+    mime_type   = audio_file.content_type or 'audio/webm'
+
+    # Construire la liste des équipements disponibles pour le NLU
+    equipments = Equipment.objects.filter(quantity__gt=0).values('id', 'name', 'reference', 'quantity')
+    available  = [{'id': e['id'], 'name': e['name'], 'reference': e['reference'], 'stock': e['quantity']} for e in equipments]
+
+    result = process_voice_discharge(audio_bytes, mime_type, available)
+
+    if 'error' in result:
+        status_code = 422 if result.get('step') == 'nlu' else 500
+        return JsonResponse(result, status=status_code)
+
+    return JsonResponse(result)

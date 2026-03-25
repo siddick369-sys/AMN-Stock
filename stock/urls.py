@@ -39,4 +39,7 @@ urlpatterns = [
     # AI — suggestions
     path('api/ai/suggestions/', views.ai_trigger_suggestions, name='ai_trigger_suggestions'),
     path('api/ai/suggestions/status/<str:cache_key>/', views.ai_suggestions_status, name='ai_suggestions_status'),
+
+    # Assistant vocal IA — décharge
+    path('api/voice/discharge/', views.voice_process_discharge, name='voice_process_discharge'),
 ]
