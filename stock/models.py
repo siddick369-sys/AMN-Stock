@@ -155,3 +155,45 @@ class EmailVerification(models.Model):
             return 0
         elapsed = (timezone.now() - self.last_resend_at).total_seconds()
         return max(0, int(self.RESEND_DELAY - elapsed))
+
+
+class PasswordReset(models.Model):
+    """
+    Réinitialisation de mot de passe par OTP email.
+    Code 6 chiffres, valable 15 minutes, usage unique.
+    Compte à rebours 2 min entre deux renvois.
+    Max 5 tentatives incorrectes avant blocage.
+    """
+    user           = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_resets')
+    code           = models.CharField(max_length=6)
+    created_at     = models.DateTimeField(auto_now_add=True)
+    expires_at     = models.DateTimeField()
+    is_used        = models.BooleanField(default=False)
+    attempts       = models.PositiveSmallIntegerField(default=0)
+    last_resend_at = models.DateTimeField(null=True, blank=True)
+    resend_count   = models.PositiveSmallIntegerField(default=0)
+
+    RESEND_DELAY         = 120   # secondes
+    MAX_ATTEMPTS         = 5
+    CODE_EXPIRY_MINUTES  = 15
+
+    class Meta:
+        verbose_name = "Réinitialisation de mot de passe"
+        ordering     = ['-created_at']
+
+    def __str__(self):
+        return f"Reset {self.user.username} (exp. {self.expires_at:%H:%M})"
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def can_resend(self):
+        if not self.last_resend_at:
+            return True
+        return (timezone.now() - self.last_resend_at).total_seconds() >= self.RESEND_DELAY
+
+    def seconds_until_resend(self):
+        if not self.last_resend_at:
+            return 0
+        elapsed = (timezone.now() - self.last_resend_at).total_seconds()
+        return max(0, int(self.RESEND_DELAY - elapsed))

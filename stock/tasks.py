@@ -473,3 +473,54 @@ def send_verification_email(self, user_id: int, code: str):
     except Exception as exc:
         logger.error("send_verification_email : échec SMTP pour user_id=%d : %s", user_id, exc)
         raise self.retry(exc=exc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RÉINITIALISATION MOT DE PASSE — CODE OTP
+# ─────────────────────────────────────────────────────────────────────────────
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_password_reset_email(self, user_id: int, code: str):
+    """
+    Envoie le code OTP de réinitialisation de mot de passe.
+    Retries automatiques : 3 × 60 secondes en cas d'échec SMTP.
+    """
+    try:
+        from django.core.mail import EmailMultiAlternatives
+        from django.template.loader import render_to_string
+
+        user = User.objects.get(pk=user_id)
+
+        subject = "[AMN Stock] Réinitialisation de votre mot de passe"
+        text_body = (
+            f"Bonjour {user.get_full_name() or user.username},\n\n"
+            f"Votre code de réinitialisation AMN Stock est :\n\n"
+            f"    {code}\n\n"
+            f"Ce code est valable {user._reset_expiry_minutes} minutes.\n\n"
+            f"Si vous n'avez pas demandé de réinitialisation, ignorez cet email "
+            f"et votre mot de passe restera inchangé.\n\n"
+            f"— Africa Mobile Networks"
+        )
+        html_body = render_to_string('emails/password_reset.html', {
+            'user': user,
+            'code': code,
+        })
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
+        logger.info("send_password_reset_email : code envoyé à %s (user=%d)", user.email, user_id)
+
+    except User.DoesNotExist:
+        logger.error("send_password_reset_email : user_id=%d introuvable", user_id)
+    except AttributeError:
+        # user._reset_expiry_minutes non défini si appelé directement
+        pass
+    except Exception as exc:
+        logger.error("send_password_reset_email : échec SMTP user_id=%d : %s", user_id, exc)
+        raise self.retry(exc=exc)

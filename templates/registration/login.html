@@ -8,137 +8,196 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #e65100 100%);
-      display: flex; align-items: center; justify-content: center;
+      min-height:100vh;
+      background:linear-gradient(135deg,#0d47a1 0%,#1565c0 50%,#e65100 100%);
+      display:flex; align-items:center; justify-content:center;
     }
-    .login-card {
-      width: 100%; max-width: 420px;
-      border: none; border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.3);
-    }
-    .login-header {
-      background: #0d47a1; color: #fff;
-      border-radius: 16px 16px 0 0; padding: 2rem; text-align: center;
-    }
+    .login-card { width:100%; max-width:420px; border:none; border-radius:16px;
+                  box-shadow:0 20px 60px rgba(0,0,0,.3); }
+    .login-header { background:#0d47a1; color:#fff; border-radius:16px 16px 0 0;
+                    padding:2rem; text-align:center; }
     .login-header .logo-circle {
-      width: 72px; height: 72px; background: rgba(255,255,255,.15); border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 1rem; font-size: 2rem;
+      width:72px; height:72px; background:rgba(255,255,255,.15); border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      margin:0 auto 1rem; font-size:2rem;
     }
-    .form-control:focus { border-color: #0d47a1; box-shadow: 0 0 0 .25rem rgba(13,71,161,.25); }
-    .btn-amn { background: #0d47a1; border-color: #0d47a1; color: #fff; }
-    .btn-amn:hover { background: #1565c0; border-color: #1565c0; color: #fff; }
+    .form-control:focus { border-color:#0d47a1; box-shadow:0 0 0 .25rem rgba(13,71,161,.25); }
+    .btn-amn { background:#0d47a1; border-color:#0d47a1; color:#fff; }
+    .btn-amn:hover { background:#1565c0; border-color:#1565c0; color:#fff; }
+    #lockout-timer { font-variant-numeric:tabular-nums; font-weight:700; }
 
-    /* Lockout countdown */
-    #lockout-timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+    /* ── Success modal ── */
+    .success-modal-body { text-align:center; padding:2.5rem 1.5rem 1rem; }
+    .success-orb {
+      width:88px; height:88px; border-radius:50%;
+      background:linear-gradient(135deg,#4caf50,#1b5e20);
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:2.6rem; color:#fff; margin-bottom:1.2rem;
+      box-shadow:0 4px 20px rgba(76,175,80,.4);
+      animation:popIn .5s cubic-bezier(.175,.885,.32,1.275);
+    }
+    @keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+    .confetti-line { font-size:1.4rem; letter-spacing:.1em; margin:.5rem 0; }
+    .success-modal-body h4 { color:#1b5e20; font-weight:800; margin:.5rem 0 .3rem; }
+    .success-modal-body p  { color:#555; font-size:.95rem; line-height:1.65; }
+    .amn-tag { display:inline-block; background:#e3f2fd; color:#0d47a1;
+               border-radius:20px; padding:.2rem .8rem; font-size:.8rem;
+               font-weight:700; margin-top:.5rem; }
   </style>
 </head>
 <body>
-  <div class="login-card card">
-    <div class="login-header">
-      <div class="logo-circle"><i class="bi bi-phone-fill"></i></div>
-      <h4 class="mb-0 fw-bold">AMN Stock</h4>
-      <p class="mb-0 opacity-75 small">Africa Mobile Networks — Gestion de Stock</p>
-    </div>
 
-    <div class="card-body p-4">
-      <h5 class="text-center mb-4 fw-semibold text-muted">Connexion à votre compte</h5>
-
-      <!-- Erreur brute-force / identifiants -->
-      {% if error %}
-      <div class="alert alert-danger py-2 small">
-        <i class="bi bi-shield-exclamation me-2"></i>{{ error }}
-        {% if lockout_remaining %}
-        &nbsp;(<span id="lockout-timer">{{ lockout_remaining }}</span> s)
-        {% endif %}
-      </div>
-      {% endif %}
-
-      <!-- Messages Django (info, warning, success) -->
-      {% if messages %}
-      {% for message in messages %}
-      <div class="alert alert-{{ message.tags }} py-2 small">
-        {% if message.tags == 'warning' %}<i class="bi bi-exclamation-circle-fill me-1"></i>
-        {% elif message.tags == 'success' %}<i class="bi bi-check-circle-fill me-1"></i>
-        {% else %}<i class="bi bi-info-circle-fill me-1"></i>{% endif %}
-        {{ message }}
-      </div>
-      {% endfor %}
-      {% endif %}
-
-      <form method="post" novalidate>
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ next }}">
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Nom d'utilisateur</label>
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-            <input type="text" name="username" class="form-control"
-                   placeholder="votre_identifiant" autofocus autocomplete="username"
-                   value="{{ username|default:'' }}" required>
-          </div>
+<!-- ══════════════════════════════════════════════════════
+     MODAL — Mot de passe modifié avec succès
+     ══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="successModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 rounded-4 overflow-hidden shadow-lg">
+      <div class="success-modal-body">
+        <div class="confetti-line">🎉 ✨ 🎊</div>
+        <div class="success-orb">
+          <i class="bi bi-check-lg"></i>
         </div>
-
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Mot de passe</label>
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
-            <input type="password" name="password" class="form-control"
-                   placeholder="••••••••" autocomplete="current-password" required>
-            <button type="button" class="btn btn-outline-secondary" id="toggle-pwd">
-              <i class="bi bi-eye-fill" id="pwd-eye"></i>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-amn w-100 fw-semibold py-2"
-                {% if lockout_remaining %}disabled{% endif %}>
-          <i class="bi bi-box-arrow-in-right me-2"></i>Se connecter
+        <h4>Mot de passe modifié !</h4>
+        <p>
+          Félicitations, votre nouveau mot de passe a été enregistré avec succès.<br>
+          <strong>Bonne visite sur AMN&nbsp;Stock&nbsp;!</strong>
+        </p>
+        <div class="confetti-line">🚀 📱 🌍</div>
+        <span class="amn-tag"><i class="bi bi-phone-fill me-1"></i>Africa Mobile Networks</span>
+      </div>
+      <div class="modal-footer border-0 justify-content-center pb-3 pt-0">
+        <button type="button" class="btn btn-amn px-4 fw-semibold" data-bs-dismiss="modal">
+          <i class="bi bi-box-arrow-in-right me-2"></i>Se connecter maintenant
         </button>
-      </form>
-
-      <hr class="my-3">
-      <p class="text-center text-muted small mb-0">
-        Pas encore de compte ?
-        <a href="{% url 'register' %}" class="fw-semibold text-decoration-none">
-          <i class="bi bi-person-plus me-1"></i>Créer un compte
-        </a>
-      </p>
-    </div>
-
-    <div class="card-footer text-center text-muted small py-3 border-0">
-      &copy; {% now "Y" %} Africa Mobile Networks
+      </div>
     </div>
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // ── Toggle password ──
-    document.getElementById('toggle-pwd')?.addEventListener('click', function() {
-      const inp = document.querySelector('input[name=password]');
-      const ico = document.getElementById('pwd-eye');
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-      ico.className = inp.type === 'password' ? 'bi bi-eye-fill' : 'bi bi-eye-slash-fill';
-    });
+<!-- ══════════════════════════════════════════════════════
+     FORMULAIRE DE CONNEXION
+     ══════════════════════════════════════════════════════ -->
+<div class="login-card card">
+  <div class="login-header">
+    <div class="logo-circle"><i class="bi bi-phone-fill"></i></div>
+    <h4 class="mb-0 fw-bold">AMN Stock</h4>
+    <p class="mb-0 opacity-75 small">Africa Mobile Networks — Gestion de Stock</p>
+  </div>
 
-    // ── Lockout countdown ──
-    let lockoutSec = {{ lockout_remaining|default:0 }};
-    const timerEl  = document.getElementById('lockout-timer');
-    const submitBtn = document.querySelector('button[type=submit]');
+  <div class="card-body p-4">
+    <h5 class="text-center mb-4 fw-semibold text-muted">Connexion à votre compte</h5>
 
-    if (lockoutSec > 0 && timerEl) {
-      const interval = setInterval(() => {
-        lockoutSec--;
-        timerEl.textContent = lockoutSec;
-        if (lockoutSec <= 0) {
-          clearInterval(interval);
-          timerEl.closest('.alert')?.remove();
-          if (submitBtn) submitBtn.disabled = false;
-        }
-      }, 1000);
-    }
-  </script>
+    <!-- Erreur brute-force / identifiants -->
+    {% if error %}
+    <div class="alert alert-danger py-2 small">
+      <i class="bi bi-shield-exclamation me-2"></i>{{ error }}
+      {% if lockout_remaining %}
+      &nbsp;(<span id="lockout-timer">{{ lockout_remaining }}</span> s)
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Messages Django -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} py-2 small">
+      {% if message.tags == 'warning' %}<i class="bi bi-exclamation-circle-fill me-1"></i>
+      {% elif message.tags == 'success' %}<i class="bi bi-check-circle-fill me-1"></i>
+      {% else %}<i class="bi bi-info-circle-fill me-1"></i>{% endif %}
+      {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Nom d'utilisateur</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+          <input type="text" name="username" class="form-control"
+                 placeholder="votre_identifiant" autofocus autocomplete="username"
+                 value="{{ username|default:'' }}" required>
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label fw-semibold">Mot de passe</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+          <input type="password" name="password" class="form-control"
+                 placeholder="••••••••" autocomplete="current-password" required>
+          <button type="button" class="btn btn-outline-secondary" id="toggle-pwd">
+            <i class="bi bi-eye-fill" id="pwd-eye"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mot de passe oublié -->
+      <div class="text-end mb-4">
+        <a href="{% url 'forgot_password' %}" class="small text-muted text-decoration-none"
+           style="font-size:.82rem;">
+          <i class="bi bi-question-circle me-1"></i>Mot de passe oublié ?
+        </a>
+      </div>
+
+      <button type="submit" class="btn btn-amn w-100 fw-semibold py-2"
+              {% if lockout_remaining %}disabled{% endif %}>
+        <i class="bi bi-box-arrow-in-right me-2"></i>Se connecter
+      </button>
+    </form>
+
+    <hr class="my-3">
+    <p class="text-center text-muted small mb-0">
+      Pas encore de compte ?
+      <a href="{% url 'register' %}" class="fw-semibold text-decoration-none">
+        <i class="bi bi-person-plus me-1"></i>Créer un compte
+      </a>
+    </p>
+  </div>
+
+  <div class="card-footer text-center text-muted small py-3 border-0">
+    &copy; {% now "Y" %} Africa Mobile Networks
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ── Toggle password ──
+  document.getElementById('toggle-pwd')?.addEventListener('click', function() {
+    const inp = document.querySelector('input[name=password]');
+    const ico = document.getElementById('pwd-eye');
+    inp.type  = inp.type === 'password' ? 'text' : 'password';
+    ico.className = inp.type === 'password' ? 'bi bi-eye-fill' : 'bi bi-eye-slash-fill';
+  });
+
+  // ── Lockout countdown ──
+  let lockoutSec = {{ lockout_remaining|default:0 }};
+  const timerEl  = document.getElementById('lockout-timer');
+  const submitBtn = document.querySelector('button[type=submit]');
+  if (lockoutSec > 0 && timerEl) {
+    const iv = setInterval(() => {
+      lockoutSec--;
+      timerEl.textContent = lockoutSec;
+      if (lockoutSec <= 0) {
+        clearInterval(iv);
+        timerEl.closest('.alert')?.remove();
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    }, 1000);
+  }
+
+  // ── Afficher le modal de succès si mot de passe vient d'être changé ──
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('pwd_changed') === '1') {
+    // Nettoyer l'URL sans rechargement
+    history.replaceState({}, '', window.location.pathname);
+    const modal = new bootstrap.Modal(document.getElementById('successModal'));
+    modal.show();
+  }
+</script>
 </body>
 </html>

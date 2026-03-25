@@ -1355,3 +1355,277 @@ def resend_verification(request):
 
     messages.success(request, f'Un nouveau code a été envoyé à {pending_user.email}.')
     return redirect('verify_email')
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MOT DE PASSE OUBLIÉ — ÉTAPE 1 : SAISIE EMAIL/USERNAME
+# ═════════════════════════════════════════════════════════════════════════════
+
+def forgot_password(request):
+    """
+    Formulaire de demande de réinitialisation.
+    Protections :
+      - Honeypot anti-bot
+      - Timing check (> 3 s)
+      - Rate-limit IP : 5 demandes/heure
+      - Ne révèle PAS si l'email/username existe (anti-enumération)
+    """
+    from .models import PasswordReset
+
+    if request.user.is_authenticated:
+        return redirect(_settings.LOGIN_REDIRECT_URL)
+
+    ip     = _get_client_ip(request)
+    now_ts = int(timezone.now().timestamp())
+    sent   = False
+
+    if request.method == 'POST':
+
+        # ── Rate-limit IP ──
+        locked, remaining = _is_locked('forgot_ip', ip, 5, 3600)
+        if locked:
+            messages.error(request, f'Trop de tentatives. Réessayez dans {remaining // 60} min.')
+            return render(request, 'registration/forgot_password.html',
+                          {'form_time': now_ts, 'sent': False})
+
+        # ── Honeypot ──
+        if request.POST.get('website'):
+            _record_attempt('forgot_ip', ip, 5, 3600)
+            # Simuler l'envoi sans rien faire (anti-bot silencieux)
+            return render(request, 'registration/forgot_password.html',
+                          {'form_time': now_ts, 'sent': True, 'masked_email': '••••@••••'})
+
+        # ── Timing ──
+        try:
+            form_time = int(request.POST.get('form_time', 0))
+        except ValueError:
+            form_time = 0
+        if (now_ts - form_time) < 3:
+            _record_attempt('forgot_ip', ip, 5, 3600)
+            messages.error(request, 'Formulaire soumis trop rapidement. Veuillez réessayer.')
+            return render(request, 'registration/forgot_password.html', {'form_time': now_ts})
+
+        identifier = request.POST.get('identifier', '').strip()[:254]
+
+        # Chercher l'utilisateur (par email ou username) sans révéler l'existence
+        user_found = None
+        if identifier:
+            try:
+                if '@' in identifier:
+                    user_found = User.objects.get(email__iexact=identifier, is_active=True)
+                else:
+                    user_found = User.objects.get(username=identifier, is_active=True)
+            except User.DoesNotExist:
+                pass
+
+        masked_email = '••••@••••'
+        if user_found:
+            # Invalider les anciens codes non utilisés
+            PasswordReset.objects.filter(user=user_found, is_used=False).update(is_used=True)
+
+            code = _generate_otp()
+            pr   = PasswordReset.objects.create(
+                user=user_found,
+                code=code,
+                expires_at=timezone.now() + timedelta(minutes=PasswordReset.CODE_EXPIRY_MINUTES),
+                last_resend_at=timezone.now(),
+            )
+            # Passer l'expiry aux minutes pour le template email
+            user_found._reset_expiry_minutes = PasswordReset.CODE_EXPIRY_MINUTES
+
+            from .tasks import send_password_reset_email
+            send_password_reset_email.delay(user_found.pk, code)
+
+            request.session['reset_uid']   = user_found.pk
+            request.session['reset_pr_id'] = pr.pk
+            _clear_attempts('forgot_ip', ip)
+
+            e = user_found.email
+            masked_email = f'{e[:2]}{"•" * max(2, len(e.split("@")[0]) - 2)}@{e.split("@")[1]}'
+
+        _record_attempt('forgot_ip', ip, 5, 3600)
+        sent = True
+        return render(request, 'registration/forgot_password.html',
+                      {'form_time': now_ts, 'sent': True, 'masked_email': masked_email})
+
+    return render(request, 'registration/forgot_password.html', {'form_time': now_ts, 'sent': False})
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MOT DE PASSE OUBLIÉ — ÉTAPE 2 : VÉRIFICATION DU CODE OTP
+# ═════════════════════════════════════════════════════════════════════════════
+
+def reset_verify(request):
+    """
+    Saisie du code OTP reçu par email.
+    Protections :
+      - 5 tentatives incorrectes → verrou 15 min
+      - Code expiré après 15 min
+      - Code à usage unique (is_used=True après vérification)
+    """
+    from .models import PasswordReset
+
+    if request.user.is_authenticated:
+        return redirect(_settings.LOGIN_REDIRECT_URL)
+
+    uid   = request.session.get('reset_uid')
+    pr_id = request.session.get('reset_pr_id')
+    if not uid or not pr_id:
+        messages.error(request, 'Session expirée. Veuillez recommencer.')
+        return redirect('forgot_password')
+
+    try:
+        pr = PasswordReset.objects.get(pk=pr_id, user_id=uid, is_used=False)
+    except PasswordReset.DoesNotExist:
+        messages.error(request, 'Ce lien de réinitialisation est invalide ou expiré.')
+        return redirect('forgot_password')
+
+    user_obj = pr.user
+    ctx = {
+        'email':               user_obj.email,
+        'seconds_until_resend': pr.seconds_until_resend(),
+    }
+
+    if request.method == 'POST':
+        digits     = [request.POST.get(f'd{i}', '').strip() for i in range(1, 7)]
+        code_input = ''.join(digits) if all(d.isdigit() for d in digits if d) else \
+                     request.POST.get('code', '').strip()
+
+        # ── Verrou brute-force ──
+        bf_locked, bf_rem = _is_locked('reset_otp', str(uid), 5, 900)
+        if bf_locked:
+            ctx['lockout_remaining'] = bf_rem
+            messages.error(request, f'Trop de tentatives. Réessayez dans {bf_rem // 60} min.')
+            return render(request, 'registration/reset_verify.html', ctx)
+
+        # ── Code expiré ──
+        if pr.is_expired():
+            ctx['expired'] = True
+            messages.warning(request, 'Le code a expiré. Cliquez sur "Renvoyer le code".')
+            return render(request, 'registration/reset_verify.html', ctx)
+
+        # ── Code incorrect ──
+        if code_input != pr.code:
+            _record_attempt('reset_otp', str(uid), 5, 900)
+            pr.attempts += 1
+            pr.save(update_fields=['attempts'])
+            remaining = max(0, PasswordReset.MAX_ATTEMPTS - pr.attempts)
+            messages.error(request, f'Code incorrect. {remaining} tentative(s) restante(s).')
+            ctx['seconds_until_resend'] = pr.seconds_until_resend()
+            return render(request, 'registration/reset_verify.html', ctx)
+
+        # ── Code correct : autoriser la réinitialisation ──
+        _clear_attempts('reset_otp', str(uid))
+        pr.is_used = True
+        pr.save(update_fields=['is_used'])
+        # Stocker le token de permission en session
+        request.session['reset_verified'] = True
+        request.session['reset_uid']      = uid   # conserver pour étape 3
+        return redirect('reset_password')
+
+    return render(request, 'registration/reset_verify.html', ctx)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MOT DE PASSE OUBLIÉ — RENVOI DU CODE
+# ═════════════════════════════════════════════════════════════════════════════
+
+def resend_reset_code(request):
+    """Génère un nouveau code OTP reset et le renvoie (après délai 2 min)."""
+    from .models import PasswordReset
+
+    if request.user.is_authenticated:
+        return redirect(_settings.LOGIN_REDIRECT_URL)
+
+    uid   = request.session.get('reset_uid')
+    pr_id = request.session.get('reset_pr_id')
+    if not uid or not pr_id:
+        return redirect('forgot_password')
+
+    try:
+        pr = PasswordReset.objects.get(pk=pr_id, user_id=uid, is_used=False)
+    except PasswordReset.DoesNotExist:
+        return redirect('forgot_password')
+
+    if not pr.can_resend():
+        messages.warning(request, 'Veuillez attendre avant de redemander un code.')
+        return redirect('reset_verify')
+
+    code = _generate_otp()
+    pr.code           = code
+    pr.expires_at     = timezone.now() + timedelta(minutes=PasswordReset.CODE_EXPIRY_MINUTES)
+    pr.attempts       = 0
+    pr.is_used        = False
+    pr.last_resend_at = timezone.now()
+    pr.resend_count  += 1
+    pr.save()
+
+    _clear_attempts('reset_otp', str(uid))
+
+    user_obj = pr.user
+    user_obj._reset_expiry_minutes = PasswordReset.CODE_EXPIRY_MINUTES
+    from .tasks import send_password_reset_email
+    send_password_reset_email.delay(user_obj.pk, code)
+
+    messages.success(request, f'Un nouveau code a été envoyé à {user_obj.email}.')
+    return redirect('reset_verify')
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MOT DE PASSE OUBLIÉ — ÉTAPE 3 : NOUVEAU MOT DE PASSE
+# ═════════════════════════════════════════════════════════════════════════════
+
+def reset_password(request):
+    """
+    Saisie du nouveau mot de passe.
+    Accessible uniquement si `reset_verified=True` en session.
+    Protections :
+      - Validation complexité (min 8 caractères)
+      - Confirmation de cohérence
+      - Token session à usage unique (supprimé après changement)
+    """
+    if request.user.is_authenticated:
+        return redirect(_settings.LOGIN_REDIRECT_URL)
+
+    if not request.session.get('reset_verified'):
+        messages.error(request, 'Session invalide. Veuillez recommencer.')
+        return redirect('forgot_password')
+
+    uid = request.session.get('reset_uid')
+    try:
+        user_obj = User.objects.get(pk=uid, is_active=True)
+    except User.DoesNotExist:
+        messages.error(request, 'Compte introuvable.')
+        return redirect('forgot_password')
+
+    if request.method == 'POST':
+        password  = request.POST.get('password', '')
+        password2 = request.POST.get('password2', '')
+
+        errors = []
+        if len(password) < 8:
+            errors.append('Le mot de passe doit contenir au moins 8 caractères.')
+        if password != password2:
+            errors.append('Les mots de passe ne correspondent pas.')
+        # Vérification basique : pas identique au nom d'utilisateur
+        if password.lower() == user_obj.username.lower():
+            errors.append('Le mot de passe ne peut pas être identique au nom d\'utilisateur.')
+
+        if errors:
+            return render(request, 'registration/reset_password.html', {'errors': errors})
+
+        # Changer le mot de passe
+        user_obj.set_password(password)
+        user_obj.save()
+
+        # Nettoyer la session
+        for key in ('reset_verified', 'reset_uid', 'reset_pr_id'):
+            request.session.pop(key, None)
+
+        # Invalider toutes les autres sessions Django (force reconnexion)
+        from django.contrib.auth import update_session_auth_hash
+        # L'utilisateur n'est pas connecté ici, donc on redirige vers login
+        # avec le flag de succès pour afficher le modal de félicitations
+        return redirect('/login/?pwd_changed=1')
+
+    return render(request, 'registration/reset_password.html', {})

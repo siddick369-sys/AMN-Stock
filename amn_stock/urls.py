@@ -15,5 +15,11 @@ urlpatterns = [
     path('verify-email/',    stock_views.verify_email,         name='verify_email'),
     path('resend-code/',     stock_views.resend_verification,  name='resend_verification'),
 
+    # ── Mot de passe oublié ──
+    path('forgot-password/',  stock_views.forgot_password,   name='forgot_password'),
+    path('reset-verify/',     stock_views.reset_verify,       name='reset_verify'),
+    path('resend-reset/',     stock_views.resend_reset_code,  name='resend_reset_code'),
+    path('reset-password/',   stock_views.reset_password,     name='reset_password'),
+
     path('', include('stock.urls')),
 ]
