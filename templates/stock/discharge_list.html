@@ -3,13 +3,56 @@
 {% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Mes Décharges{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <p class="text-muted mb-0">Liste de toutes les décharges d'équipements.</p>
-  <a href="{% url 'discharge_create' %}" class="btn btn-primary">
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <p class="text-muted mb-0">
+    <strong>{{ page_obj.paginator.count }}</strong> décharge(s) au total.
+  </p>
+  <a href="{% url 'discharge_create' %}" class="btn btn-primary btn-sm">
     <i class="bi bi-plus-lg me-1"></i>Nouvelle décharge
   </a>
 </div>
 
+<!-- ── Filtres ── -->
+<form method="get" class="card table-card mb-3">
+  <div class="card-body py-3 px-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold small mb-1"><i class="bi bi-search me-1"></i>Recherche</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Mission, destination, technicien…" value="{{ q }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Statut</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Tous</option>
+          <option value="open"   {% if status == 'open'   %}selected{% endif %}>En cours</option>
+          <option value="closed" {% if status == 'closed' %}selected{% endif %}>Clôturée</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Du</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Au</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+      </div>
+      <div class="col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+          <i class="bi bi-funnel-fill me-1"></i>Filtrer
+        </button>
+        {% if q or status or date_from or date_to %}
+        <a href="{% url 'discharge_list' %}" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- ── Tableau ── -->
 <div class="card table-card">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
@@ -25,40 +68,99 @@
         </tr>
       </thead>
       <tbody>
-        {% for d in discharges %}
+        {% for d in page_obj %}
         <tr>
           <td><strong>#{{ d.pk }}</strong></td>
-          <td>{{ d.user.get_full_name|default:d.user.username }}</td>
+          <td>
+            <div class="fw-semibold">{{ d.user.get_full_name|default:d.user.username }}</div>
+            <small class="text-muted">@{{ d.user.username }}</small>
+          </td>
           <td>{{ d.destination }}</td>
           <td>{{ d.date|date:"d/m/Y H:i" }}</td>
-          <td class="text-center">{{ d.items.count }}</td>
+          <td class="text-center">
+            <span class="badge bg-secondary rounded-pill">{{ d.items.count }}</span>
+          </td>
           <td class="text-center">
             {% if d.status == 'open' %}
-            <span class="badge bg-info text-dark rounded-pill">En cours</span>
+            <span class="badge bg-info text-dark rounded-pill">
+              <i class="bi bi-play-circle-fill me-1"></i>En cours
+            </span>
             {% else %}
-            <span class="badge bg-success rounded-pill">Clôturée</span>
+            <span class="badge bg-success rounded-pill">
+              <i class="bi bi-check-circle-fill me-1"></i>Clôturée
+            </span>
             {% endif %}
           </td>
           <td class="text-center">
-            <a href="{% url 'discharge_detail' d.pk %}" class="btn btn-sm btn-outline-primary">
+            <a href="{% url 'discharge_detail' d.pk %}" class="btn btn-sm btn-outline-primary" title="Voir le détail">
               <i class="bi bi-eye-fill"></i>
             </a>
             {% if d.status == 'open' %}
-            <a href="{% url 'field_report_create' d.pk %}" class="btn btn-sm btn-outline-success ms-1" title="Créer rapport de retour">
-              <i class="bi bi-file-earmark-plus-fill"></i>
-            </a>
+              {% if d.user == request.user %}
+              <a href="{% url 'discharge_edit' d.pk %}" class="btn btn-sm btn-outline-warning ms-1" title="Modifier ma décharge">
+                <i class="bi bi-pencil-fill"></i>
+              </a>
+              {% endif %}
+              <a href="{% url 'field_report_create' d.pk %}" class="btn btn-sm btn-outline-success ms-1" title="Créer rapport de retour">
+                <i class="bi bi-file-earmark-plus-fill"></i>
+              </a>
             {% endif %}
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">
-            Aucune décharge enregistrée. <a href="{% url 'discharge_create' %}">Créer une décharge</a>.
+          <td colspan="7" class="text-center text-muted py-5">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+            {% if q or status or date_from or date_to %}
+              Aucun résultat pour ces filtres.
+              <a href="{% url 'discharge_list' %}" class="ms-1">Réinitialiser</a>
+            {% else %}
+              Aucune décharge enregistrée.
+              <a href="{% url 'discharge_create' %}">Créer une décharge</a>.
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <!-- ── Pagination ── -->
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2 px-4 flex-wrap gap-2">
+    <small class="text-muted">
+      Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+      &nbsp;·&nbsp; {{ page_obj.paginator.count }} décharge(s)
+    </small>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+          {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ num }}">{{ num }}</a>
+          </li>
+          {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
 </div>
+
 {% endblock %}

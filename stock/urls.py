@@ -25,6 +25,13 @@ urlpatterns = [
     path('discharges/', views.discharge_list, name='discharge_list'),
     path('discharges/create/', views.discharge_create, name='discharge_create'),
     path('discharges/<int:pk>/', views.discharge_detail, name='discharge_detail'),
+    path('discharges/<int:pk>/edit/', views.discharge_edit, name='discharge_edit'),
+
+    # Gestion des comptes (admin)
+    path('accounts/', views.user_list, name='user_list'),
+    path('accounts/create/', views.user_create, name='user_create'),
+    path('accounts/<int:pk>/edit/', views.user_edit, name='user_edit'),
+    path('accounts/<int:pk>/delete/', views.user_delete, name='user_delete'),
 
     # Field reports
     path('discharges/<int:discharge_pk>/report/create/', views.field_report_create, name='field_report_create'),

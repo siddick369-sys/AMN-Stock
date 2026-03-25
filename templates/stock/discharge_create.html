@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Nouvelle Décharge{% endblock %}
-{% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Nouvelle Décharge{% endblock %}
+{% block title %}{% if is_edit %}Modifier la décharge #{{ discharge.pk }}{% else %}Nouvelle Décharge{% endif %}{% endblock %}
+{% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>{% if is_edit %}Modifier la décharge <span class="text-muted fw-normal">#{{ discharge.pk }}</span>{% else %}Nouvelle Décharge{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -159,7 +159,7 @@
             <label class="form-label fw-semibold">Destination / Mission <span class="text-danger">*</span></label>
             <input type="text" name="destination" id="destination-input" class="form-control"
                    placeholder="Ex: Mission Abidjan Nord — Installation antenne site BTS-042"
-                   value="{{ request.POST.destination }}" required>
+                   value="{% if is_edit %}{{ discharge.destination }}{% else %}{{ request.POST.destination }}{% endif %}" required>
           </div>
 
           <!-- Items section -->
@@ -178,11 +178,15 @@
 
           <!-- Submit -->
           <div class="d-flex gap-2 justify-content-end border-top pt-3 mt-2">
-            <a href="{% url 'discharge_list' %}" class="btn btn-secondary">
+            <a href="{% if is_edit %}{% url 'discharge_detail' discharge.pk %}{% else %}{% url 'discharge_list' %}{% endif %}" class="btn btn-secondary">
               <i class="bi bi-arrow-left me-1"></i>Annuler
             </a>
             <button type="submit" class="btn btn-primary" id="submit-btn">
+              {% if is_edit %}
+              <i class="bi bi-check2-circle me-1"></i>Enregistrer les modifications
+              {% else %}
               <i class="bi bi-send-fill me-1"></i>Valider la décharge
+              {% endif %}
             </button>
           </div>
         </form>
@@ -332,11 +336,17 @@
 <script>
 const EQUIPMENTS = [
   {% for eq in equipments %}
-  { id: {{ eq.id }}, name: "{{ eq.name|escapejs }}", reference: "{{ eq.reference|escapejs }}", stock: {{ eq.quantity }} }{% if not forloop.last %},{% endif %}
+  { id: {{ eq.id }}, name: "{{ eq.name|escapejs }}", reference: "{{ eq.reference|escapejs }}", stock: {% if is_edit %}{{ eq._available_for_edit|default:eq.quantity }}{% else %}{{ eq.quantity }}{% endif %} }{% if not forloop.last %},{% endif %}
   {% endfor %}
 ];
 const CSRF_TOKEN = "{{ csrf_token }}";
 const VOICE_URL  = "{% url 'voice_process_discharge' %}";
+const IS_EDIT    = {% if is_edit %}true{% else %}false{% endif %};
+const EXISTING_ITEMS = [
+  {% if is_edit %}{% for item in existing_items %}
+  { equipment_id: {{ item.equipment_id }}, quantity: {{ item.quantity }} }{% if not forloop.last %},{% endif %}
+  {% endfor %}{% endif %}
+];
 </script>
 {% endblock %}
 
@@ -425,7 +435,12 @@ document.getElementById('discharge-form').addEventListener('submit', function(e)
   }
 });
 
-addItem(); // Ligne vide par défaut
+// En mode édition, pré-remplir avec les items existants
+if (IS_EDIT && EXISTING_ITEMS.length) {
+  EXISTING_ITEMS.forEach(item => addItem(item.equipment_id, item.quantity));
+} else {
+  addItem(); // Ligne vide par défaut (mode création)
+}
 
 /* ═══════════════════════════════════════════════
    VOICE ASSISTANT

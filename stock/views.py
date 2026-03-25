@@ -32,17 +32,23 @@ def is_technician(user):
 @login_required
 @user_passes_test(is_admin)
 def dashboard(request):
+    from django.core.paginator import Paginator
+
     search_query = request.GET.get('q', '').strip()
-    equipments = Equipment.objects.all()
+    equipments_qs = Equipment.objects.all().order_by('name')
 
     if search_query:
-        equipments = equipments.filter(
+        equipments_qs = equipments_qs.filter(
             Q(name__icontains=search_query) | Q(reference__icontains=search_query)
         )
 
+    paginator  = Paginator(equipments_qs, 20)
+    page_obj   = paginator.get_page(request.GET.get('page'))
+
     context = {
-        'equipments': equipments,
-        'search_query': search_query,
+        'equipments':    page_obj,        # toujours nommé equipments pour compatibilité template
+        'page_obj':      page_obj,
+        'search_query':  search_query,
         'total_equipment': Equipment.objects.count(),
         'low_stock_count': sum(1 for e in Equipment.objects.all() if e.is_low_stock),
         'total_discharges': Discharge.objects.filter(status='open').count(),
@@ -280,11 +286,44 @@ def send_hub_alert_view(request):
 
 @login_required
 def discharge_list(request):
+    from django.core.paginator import Paginator
+
     if request.user.is_staff:
-        discharges = Discharge.objects.select_related('user').prefetch_related('items__equipment').all()
+        qs = Discharge.objects.select_related('user').prefetch_related('items__equipment').all()
     else:
-        discharges = Discharge.objects.filter(user=request.user).select_related('user').prefetch_related('items__equipment')
-    return render(request, 'stock/discharge_list.html', {'discharges': discharges})
+        qs = Discharge.objects.filter(user=request.user).select_related('user').prefetch_related('items__equipment')
+
+    # ── Filtres ──
+    q         = request.GET.get('q', '').strip()
+    status    = request.GET.get('status', '')
+    date_from = request.GET.get('date_from', '')
+    date_to   = request.GET.get('date_to', '')
+
+    if q:
+        qs = qs.filter(
+            Q(destination__icontains=q) |
+            Q(user__username__icontains=q) |
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q)
+        )
+    if status in ('open', 'closed'):
+        qs = qs.filter(status=status)
+    if date_from:
+        qs = qs.filter(date__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__date__lte=date_to)
+
+    qs = qs.order_by('-date')
+    paginator = Paginator(qs, 15)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'stock/discharge_list.html', {
+        'page_obj':  page_obj,
+        'q':         q,
+        'status':    status,
+        'date_from': date_from,
+        'date_to':   date_to,
+    })
 
 
 @login_required
@@ -379,6 +418,135 @@ def discharge_detail(request, pk):
     return render(request, 'stock/discharge_detail.html', {
         'discharge': discharge,
         'has_report': has_report,
+    })
+
+
+@login_required
+def discharge_edit(request, pk):
+    """
+    Permet au créateur de la décharge (ou à un admin) de la modifier
+    tant qu'elle est encore ouverte.
+    Restaure les quantités originales puis applique les nouvelles.
+    """
+    discharge = get_object_or_404(Discharge, pk=pk)
+
+    # Contrôle d'accès : seul le créateur peut modifier
+    if discharge.user != request.user and not request.user.is_staff:
+        messages.error(request, 'Accès refusé.')
+        return redirect('discharge_list')
+
+    if discharge.status == 'closed':
+        messages.warning(request, 'Impossible de modifier une décharge clôturée.')
+        return redirect('discharge_detail', pk=pk)
+
+    equipments = Equipment.objects.order_by('name')
+
+    if request.method == 'POST':
+        destination = request.POST.get('destination', '').strip()
+        if not destination:
+            messages.error(request, 'La destination est obligatoire.')
+            return render(request, 'stock/discharge_create.html', {
+                'equipments': Equipment.objects.filter(quantity__gt=0).order_by('name'),
+                'discharge': discharge,
+                'is_edit': True,
+            })
+
+        item_equipment_ids = request.POST.getlist('equipment_id[]')
+        item_quantities    = request.POST.getlist('quantity[]')
+
+        if not item_equipment_ids:
+            messages.error(request, 'Ajoutez au moins un équipement.')
+            return render(request, 'stock/discharge_create.html', {
+                'equipments': Equipment.objects.filter(quantity__gt=0).order_by('name'),
+                'discharge': discharge,
+                'is_edit': True,
+            })
+
+        items_data = []
+        errors = []
+
+        # Calculer le stock effectivement disponible en tenant compte
+        # des items déjà dans cette décharge (qui seront restaurés)
+        original_items = {di.equipment_id: di.quantity for di in discharge.items.all()}
+
+        for eq_id, qty_str in zip(item_equipment_ids, item_quantities):
+            try:
+                equipment = Equipment.objects.get(id=int(eq_id))
+                quantity  = int(qty_str)
+                if quantity <= 0:
+                    errors.append(f'La quantité pour "{equipment.name}" doit être > 0.')
+                    continue
+                # Stock disponible = stock actuel + ce qu'on avait déjà pris dans cette décharge
+                available = equipment.quantity + original_items.get(equipment.id, 0)
+                if quantity > available:
+                    errors.append(
+                        f'"{equipment.name}" : stock insuffisant (dispo : {available}, demandé : {quantity}).'
+                    )
+                else:
+                    items_data.append({'equipment': equipment, 'quantity': quantity})
+            except (Equipment.DoesNotExist, ValueError):
+                errors.append('Équipement invalide.')
+
+        if errors:
+            return render(request, 'stock/discharge_create.html', {
+                'equipments': Equipment.objects.filter(quantity__gt=0).order_by('name'),
+                'discharge': discharge,
+                'is_edit': True,
+                'errors': errors,
+            })
+
+        with transaction.atomic():
+            # 1. Restaurer les anciennes quantités
+            for di in discharge.items.select_related('equipment').all():
+                di.equipment.quantity += di.quantity
+                di.equipment.save()
+                StockMovement.objects.create(
+                    equipment=di.equipment,
+                    movement_type='in',
+                    quantity=di.quantity,
+                    note=f'Correction décharge #{discharge.pk} — ancienne valeur restaurée',
+                )
+
+            # 2. Supprimer les anciens items
+            discharge.items.all().delete()
+
+            # 3. Mettre à jour la destination
+            discharge.destination = destination
+            discharge.save()
+
+            # 4. Créer les nouveaux items et déduire le stock
+            for item in items_data:
+                DischargeItem.objects.create(
+                    discharge=discharge,
+                    equipment=item['equipment'],
+                    quantity=item['quantity'],
+                )
+                item['equipment'].quantity -= item['quantity']
+                item['equipment'].save()
+                StockMovement.objects.create(
+                    equipment=item['equipment'],
+                    movement_type='out',
+                    quantity=item['quantity'],
+                    note=f'Décharge #{discharge.pk} (modifiée) - {destination}',
+                )
+
+        messages.success(request, f'Décharge #{discharge.pk} modifiée avec succès.')
+        return redirect('discharge_detail', pk=discharge.pk)
+
+    # GET : pré-remplir avec les items existants
+    existing_items = discharge.items.select_related('equipment').all()
+    # Pour le template, on doit exposer tous les équipements (stock actuel + ce qu'on a pris)
+    equip_for_form = []
+    orig = {di.equipment_id: di.quantity for di in existing_items}
+    for eq in equipments:
+        eq._available_for_edit = eq.quantity + orig.get(eq.id, 0)
+        equip_for_form.append(eq)
+
+    return render(request, 'stock/discharge_create.html', {
+        'equipments':    equip_for_form,
+        'discharge':     discharge,
+        'existing_items': existing_items,
+        'is_edit':       True,
     })
 
 
@@ -666,3 +834,144 @@ def voice_process_discharge(request):
         return JsonResponse(result, status=status_code)
 
     return JsonResponse(result)
+
+
+# ─────────────────────────────────────────────
+# GESTION DES COMPTES (admin only)
+# ─────────────────────────────────────────────
+
+from django.contrib.auth.models import User
+from django.core.paginator import Paginator
+
+
+@login_required
+@user_passes_test(is_admin)
+def user_list(request):
+    q = request.GET.get('q', '').strip()
+    role = request.GET.get('role', '')
+
+    users = User.objects.all().order_by('username')
+
+    if q:
+        users = users.filter(
+            Q(username__icontains=q) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(email__icontains=q)
+        )
+    if role == 'admin':
+        users = users.filter(is_staff=True)
+    elif role == 'tech':
+        users = users.filter(is_staff=False)
+
+    paginator = Paginator(users, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'stock/user_list.html', {
+        'page_obj': page_obj,
+        'q': q,
+        'role': role,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def user_create(request):
+    if request.method == 'POST':
+        username   = request.POST.get('username', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name  = request.POST.get('last_name', '').strip()
+        email      = request.POST.get('email', '').strip()
+        password   = request.POST.get('password', '')
+        is_staff   = request.POST.get('is_staff') == '1'
+
+        errors = []
+        if not username:
+            errors.append("Le nom d'utilisateur est obligatoire.")
+        elif User.objects.filter(username=username).exists():
+            errors.append(f'Le nom d\'utilisateur "{username}" est déjà utilisé.')
+        if not password:
+            errors.append("Le mot de passe est obligatoire.")
+        elif len(password) < 6:
+            errors.append("Le mot de passe doit contenir au moins 6 caractères.")
+
+        if errors:
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            is_staff=is_staff,
+        )
+        return JsonResponse({'success': True, 'message': f'Utilisateur "{user.username}" créé avec succès.'})
+
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'}, status=405)
+
+
+@login_required
+@user_passes_test(is_admin)
+def user_edit(request, pk):
+    target = get_object_or_404(User, pk=pk)
+
+    if request.method == 'GET':
+        return JsonResponse({
+            'id':         target.id,
+            'username':   target.username,
+            'first_name': target.first_name,
+            'last_name':  target.last_name,
+            'email':      target.email,
+            'is_staff':   target.is_staff,
+        })
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Données invalides.'}, status=400)
+
+        username   = data.get('username', '').strip()
+        first_name = data.get('first_name', '').strip()
+        last_name  = data.get('last_name', '').strip()
+        email      = data.get('email', '').strip()
+        is_staff   = bool(data.get('is_staff', False))
+
+        errors = []
+        if not username:
+            errors.append("Le nom d'utilisateur est obligatoire.")
+        elif User.objects.filter(username=username).exclude(pk=pk).exists():
+            errors.append(f'Le nom d\'utilisateur "{username}" est déjà utilisé.')
+
+        if errors:
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+        # Empêcher de se retirer ses propres droits admin
+        if target == request.user and not is_staff:
+            return JsonResponse({'success': False, 'errors': ["Vous ne pouvez pas retirer vos propres droits administrateur."]}, status=400)
+
+        target.username   = username
+        target.first_name = first_name
+        target.last_name  = last_name
+        target.email      = email
+        target.is_staff   = is_staff
+        target.save()
+
+        return JsonResponse({'success': True, 'message': f'Utilisateur "{target.username}" modifié avec succès.'})
+
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'}, status=405)
+
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def user_delete(request, pk):
+    target = get_object_or_404(User, pk=pk)
+
+    if target == request.user:
+        return JsonResponse({'success': False, 'error': 'Vous ne pouvez pas supprimer votre propre compte.'}, status=400)
+
+    username = target.username
+    target.delete()
+    return JsonResponse({'success': True, 'message': f'Utilisateur "{username}" supprimé.'})

@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+{% block title %}Gestion des comptes{% endblock %}
+{% block page_title %}<i class="bi bi-people-fill me-2"></i>Gestion des comptes{% endblock %}
+
+{% block extra_css %}
+<style>
+  .role-badge-admin { background:#e3f2fd; color:#0d47a1; border:1px solid #90caf9; }
+  .role-badge-tech  { background:#f3e5f5; color:#6a1b9a; border:1px solid #ce93d8; }
+  .avatar-circle {
+    width:36px; height:36px; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.85rem; color:#fff;
+    flex-shrink:0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Modals ── -->
+
+<!-- Add / Edit modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" id="userModalHeader">
+        <h5 class="modal-title" id="userModalTitle">Nouvel utilisateur</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="userFormErrors" class="alert alert-danger d-none"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nom d'utilisateur <span class="text-danger">*</span></label>
+          <input type="text" id="f_username" class="form-control" placeholder="ex: jean.dupont" autocomplete="off">
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col">
+            <label class="form-label fw-semibold">Prénom</label>
+            <input type="text" id="f_first_name" class="form-control" placeholder="Jean">
+          </div>
+          <div class="col">
+            <label class="form-label fw-semibold">Nom</label>
+            <input type="text" id="f_last_name" class="form-control" placeholder="Dupont">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Email</label>
+          <input type="email" id="f_email" class="form-control" placeholder="jean@amn.ci">
+        </div>
+        <div class="mb-3" id="password-field-wrap">
+          <label class="form-label fw-semibold">Mot de passe <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" id="f_password" class="form-control" placeholder="Min. 6 caractères" autocomplete="new-password">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePwd()">
+              <i class="bi bi-eye" id="pwd-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="mb-1">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="f_is_staff" role="switch">
+            <label class="form-check-label fw-semibold" for="f_is_staff">
+              <i class="bi bi-shield-fill-check text-primary me-1"></i>Droits administrateur
+            </label>
+          </div>
+          <small class="text-muted ms-4">L'administrateur accède au dashboard et à la gestion des comptes.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button class="btn btn-primary" id="userModalSaveBtn" onclick="saveUser()">
+          <i class="bi bi-check2-circle me-1"></i>Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>Supprimer</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Supprimer l'utilisateur <strong id="del-username"></strong> ?
+        <br><small class="text-muted">Cette action est irréversible.</small>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button class="btn btn-danger btn-sm" id="confirmDeleteBtn" onclick="confirmDelete()">
+          <i class="bi bi-trash-fill me-1"></i>Supprimer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <p class="text-muted mb-0">
+    <strong>{{ page_obj.paginator.count }}</strong> utilisateur(s) enregistré(s).
+  </p>
+  <button class="btn btn-primary btn-sm" onclick="openCreateModal()">
+    <i class="bi bi-person-plus-fill me-1"></i>Ajouter un utilisateur
+  </button>
+</div>
+
+<!-- ── Filters ── -->
+<form method="get" class="card table-card mb-3">
+  <div class="card-body py-3 px-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label fw-semibold small mb-1">Recherche</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Nom, prénom, email…" value="{{ q }}">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold small mb-1">Rôle</label>
+        <select name="role" class="form-select form-select-sm">
+          <option value="">Tous</option>
+          <option value="admin" {% if role == 'admin' %}selected{% endif %}>Administrateur</option>
+          <option value="tech"  {% if role == 'tech'  %}selected{% endif %}>Technicien</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+          <i class="bi bi-funnel-fill me-1"></i>Filtrer
+        </button>
+        {% if q or role %}
+        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- ── Table ── -->
+<div class="card table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>Utilisateur</th>
+          <th>Email</th>
+          <th class="text-center">Rôle</th>
+          <th class="text-center">Inscrit le</th>
+          <th class="text-center">Dernière connexion</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in page_obj %}
+        <tr id="user-row-{{ u.pk }}">
+          <td class="text-muted small">{{ u.pk }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="avatar-circle" style="background:{{ u.pk|stringformat:'d'|slice:':1' }}0d47a1;background:{% cycle '#0d47a1' '#e65100' '#2e7d32' '#6a1b9a' '#00695c' as colors %};">
+                {{ u.username|slice:":1"|upper }}
+              </div>
+              <div>
+                <div class="fw-semibold">{{ u.get_full_name|default:u.username }}</div>
+                <small class="text-muted">@{{ u.username }}</small>
+              </div>
+            </div>
+          </td>
+          <td>{{ u.email|default:"—" }}</td>
+          <td class="text-center">
+            {% if u.is_superuser %}
+            <span class="badge role-badge-admin rounded-pill px-3">
+              <i class="bi bi-star-fill me-1"></i>Super Admin
+            </span>
+            {% elif u.is_staff %}
+            <span class="badge role-badge-admin rounded-pill px-3">
+              <i class="bi bi-shield-fill-check me-1"></i>Admin
+            </span>
+            {% else %}
+            <span class="badge role-badge-tech rounded-pill px-3">
+              <i class="bi bi-person-badge me-1"></i>Technicien
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-center small">{{ u.date_joined|date:"d/m/Y" }}</td>
+          <td class="text-center small">
+            {% if u.last_login %}{{ u.last_login|date:"d/m/Y H:i" }}{% else %}<span class="text-muted">Jamais</span>{% endif %}
+          </td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-outline-primary me-1" title="Modifier"
+                    onclick="openEditModal({{ u.pk }}, '{{ u.username|escapejs }}', '{{ u.first_name|escapejs }}', '{{ u.last_name|escapejs }}', '{{ u.email|escapejs }}', {{ u.is_staff|lower }})">
+              <i class="bi bi-pencil-fill"></i>
+            </button>
+            {% if not u.is_superuser %}
+            <button class="btn btn-sm btn-outline-danger" title="Supprimer"
+                    onclick="openDeleteModal({{ u.pk }}, '{{ u.username|escapejs }}')">
+              <i class="bi bi-trash-fill"></i>
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-5">
+            <i class="bi bi-people fs-2 d-block mb-2"></i>
+            Aucun utilisateur trouvé.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2 px-4">
+    <small class="text-muted">
+      Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+      &nbsp;·&nbsp; {{ page_obj.paginator.count }} utilisateur(s)
+    </small>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if role %}role={{ role }}&{% endif %}page={{ page_obj.previous_page_number }}">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+          {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if role %}role={{ role }}&{% endif %}page={{ num }}">{{ num }}</a>
+          </li>
+          {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if role %}role={{ role }}&{% endif %}page={{ page_obj.next_page_number }}">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+const CREATE_URL = "{% url 'user_create' %}";
+const CSRF_TOKEN = "{{ csrf_token }}";
+
+let editUserId = null;
+let deleteUserId = null;
+let userModal, deleteModal;
+
+document.addEventListener('DOMContentLoaded', () => {
+  userModal   = new bootstrap.Modal(document.getElementById('userModal'));
+  deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+});
+
+function openCreateModal() {
+  editUserId = null;
+  document.getElementById('userModalTitle').textContent = 'Nouvel utilisateur';
+  document.getElementById('userModalHeader').className  = 'modal-header bg-primary text-white';
+  document.getElementById('userModalSaveBtn').innerHTML = '<i class="bi bi-person-plus-fill me-1"></i>Créer';
+  document.getElementById('password-field-wrap').style.display = '';
+  clearForm();
+  userModal.show();
+}
+
+function openEditModal(id, username, firstName, lastName, email, isStaff) {
+  editUserId = id;
+  document.getElementById('userModalTitle').textContent = `Modifier — @${username}`;
+  document.getElementById('userModalHeader').className  = 'modal-header';
+  document.getElementById('userModalSaveBtn').innerHTML = '<i class="bi bi-check2-circle me-1"></i>Enregistrer';
+  document.getElementById('password-field-wrap').style.display = 'none';
+  document.getElementById('f_username').value   = username;
+  document.getElementById('f_first_name').value = firstName;
+  document.getElementById('f_last_name').value  = lastName;
+  document.getElementById('f_email').value      = email;
+  document.getElementById('f_is_staff').checked = isStaff;
+  document.getElementById('userFormErrors').classList.add('d-none');
+  userModal.show();
+}
+
+function clearForm() {
+  ['f_username','f_first_name','f_last_name','f_email','f_password'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f_is_staff').checked = false;
+  document.getElementById('userFormErrors').classList.add('d-none');
+}
+
+async function saveUser() {
+  const errBox = document.getElementById('userFormErrors');
+  errBox.classList.add('d-none');
+
+  const isEdit = editUserId !== null;
+  const url    = isEdit
+    ? `/accounts/${editUserId}/edit/`
+    : CREATE_URL;
+
+  let payload;
+  let fetchOpts;
+
+  if (isEdit) {
+    payload = JSON.stringify({
+      username:   document.getElementById('f_username').value.trim(),
+      first_name: document.getElementById('f_first_name').value.trim(),
+      last_name:  document.getElementById('f_last_name').value.trim(),
+      email:      document.getElementById('f_email').value.trim(),
+      is_staff:   document.getElementById('f_is_staff').checked,
+    });
+    fetchOpts = {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body:    payload,
+    };
+  } else {
+    // Pour la création on utilise FormData (mot de passe inclus)
+    const fd = new FormData();
+    fd.append('username',   document.getElementById('f_username').value.trim());
+    fd.append('first_name', document.getElementById('f_first_name').value.trim());
+    fd.append('last_name',  document.getElementById('f_last_name').value.trim());
+    fd.append('email',      document.getElementById('f_email').value.trim());
+    fd.append('password',   document.getElementById('f_password').value);
+    fd.append('is_staff',   document.getElementById('f_is_staff').checked ? '1' : '0');
+    fetchOpts = {
+      method:  'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+      body:    fd,
+    };
+  }
+
+  try {
+    const resp = await fetch(url, fetchOpts);
+    const data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      const msgs = data.errors || [data.error || 'Erreur inconnue.'];
+      errBox.innerHTML = msgs.map(m => `<div>${m}</div>`).join('');
+      errBox.classList.remove('d-none');
+      return;
+    }
+
+    userModal.hide();
+    showToast(data.message, 'success');
+    setTimeout(() => location.reload(), 800);
+  } catch (err) {
+    errBox.textContent = `Erreur réseau : ${err.message}`;
+    errBox.classList.remove('d-none');
+  }
+}
+
+function openDeleteModal(id, username) {
+  deleteUserId = id;
+  document.getElementById('del-username').textContent = username;
+  deleteModal.show();
+}
+
+async function confirmDelete() {
+  try {
+    const resp = await fetch(`/accounts/${deleteUserId}/delete/`, {
+      method:  'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      showToast(data.error || 'Erreur lors de la suppression.', 'danger');
+      deleteModal.hide();
+      return;
+    }
+    deleteModal.hide();
+    showToast(data.message, 'success');
+    const row = document.getElementById(`user-row-${deleteUserId}`);
+    if (row) { row.style.transition = 'opacity .4s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 450); }
+  } catch (err) {
+    showToast(`Erreur réseau : ${err.message}`, 'danger');
+  }
+}
+
+function togglePwd() {
+  const inp = document.getElementById('f_password');
+  const ico = document.getElementById('pwd-eye');
+  if (inp.type === 'password') { inp.type = 'text'; ico.className = 'bi bi-eye-slash'; }
+  else                          { inp.type = 'password'; ico.className = 'bi bi-eye'; }
+}
+</script>
+{% endblock %}

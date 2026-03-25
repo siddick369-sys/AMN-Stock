@@ -150,6 +150,11 @@
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
     </li>
+    <li class="nav-item">
+      <a href="{% url 'user_list' %}" class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-people-fill"></i> Gestion des comptes
+      </a>
+    </li>
     {% endif %}
     <li class="nav-item">
       <a href="{% url 'discharge_list' %}" class="nav-link {% if 'discharge' in request.resolver_match.url_name %}active{% endif %}">
