@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 # ── constantes ──────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL = "https://api.green-api.com"
-REQUEST_TIMEOUT  = 15   # secondes
-MAX_RETRIES      = 3
-RETRY_DELAYS     = [2, 5, 10]   # secondes entre chaque tentative
+REQUEST_TIMEOUT  = 30   # secondes
+MAX_RETRIES      = 4
+RETRY_DELAYS     = [5, 10, 20, 30]   # secondes entre chaque tentative
 
 
 class GreenAPIError(Exception):

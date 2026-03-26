@@ -68,8 +68,10 @@ def check_low_stock(self):
         .exclude(email='')
         .values_list('email', flat=True)
     )
-    if settings.ADMIN_EMAIL and settings.ADMIN_EMAIL not in admin_emails:
-        admin_emails.append(settings.ADMIN_EMAIL)
+    if settings.ADMIN_EMAIL:
+        for email in settings.ADMIN_EMAIL:
+            if email and email not in admin_emails:
+                admin_emails.append(email)
 
     items_text = "\n".join(
         f"  • {item.name} ({item.reference}) : {item.quantity} unité(s)"

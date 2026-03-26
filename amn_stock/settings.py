@@ -94,7 +94,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@amn.africa')
-ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@amn.africa')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@amn.africa').split(',')
 
 # Celery configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
@@ -106,17 +106,28 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# Cache configuration (shared between Web and Celery)
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CELERY_BROKER_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
 # Low stock threshold
 LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
 
 # ── Groq AI ────────────────────────────────────────────────────────────────
 # Obtenir la clé sur https://console.groq.com/keys
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 # ── Green API (WhatsApp) ────────────────────────────────────────────────────
 # Obtenir les credentials sur https://console.green-api.com/
-GREENAPI_INSTANCE_ID = os.environ.get('GREENAPI_INSTANCE_ID', '')
-GREENAPI_TOKEN       = os.environ.get('GREENAPI_TOKEN', '')
+GREENAPI_INSTANCE_ID = os.environ.get("GREENAPI_INSTANCE_ID", "")
+GREENAPI_TOKEN       = os.environ.get("GREENAPI_TOKEN", "")
 # Numéro WhatsApp cible (sans +), ex: 237678317658 pour +237 678 317 658
 GREENAPI_RECIPIENT   = os.environ.get('GREENAPI_RECIPIENT', '237678317658')
 # URL de base Green API (ne pas modifier sauf test)

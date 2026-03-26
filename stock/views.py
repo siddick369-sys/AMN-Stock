@@ -30,10 +30,11 @@ def is_technician(user):
 # ─────────────────────────────────────────────
 
 @login_required
-@user_passes_test(is_admin)
 def dashboard(request):
     from django.core.paginator import Paginator
 
+    if not is_admin(request.user):
+        return redirect('discharge_list')
     search_query = request.GET.get('q', '').strip()
     equipments_qs = Equipment.objects.all().order_by('name')
 

@@ -176,14 +176,19 @@
         <div>{% if user.is_staff %}Administrateur{% else %}Technicien{% endif %}</div>
       </div>
     </div>
-    <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-light w-100 mt-2">
-      <i class="bi bi-box-arrow-right"></i> Déconnexion
-    </a>
+    <form action="{% url 'logout' %}" method="post" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-light w-100">
+        <i class="bi bi-box-arrow-right"></i> Déconnexion
+      </button>
+    </form>
   </div>
 </nav>
+{% endif %}
 
 <!-- ══════ MAIN ══════ -->
-<div id="main-content">
+<div id="main-content" {% if not user.is_authenticated %}style="margin-left:0"{% endif %}>
+  {% if user.is_authenticated %}
   <header class="topbar">
     <button class="btn btn-sm btn-light d-md-none" id="sidebar-toggle">
       <i class="bi bi-list fs-5"></i>
@@ -203,30 +208,28 @@
       <span class="text-muted small d-none d-sm-block">{{ user.username }}</span>
     </div>
   </header>
+  {% endif %}
 
-  <main class="p-4 flex-grow-1">
+  <main class="p-4 {% if user.is_authenticated %}flex-grow-1{% endif %}">
     <!-- Django messages -->
+    {% if messages %}
     {% for message in messages %}
     <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
       {{ message }}
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endfor %}
+    {% endif %}
 
     {% block content %}{% endblock %}
   </main>
 
+  {% if user.is_authenticated %}
   <footer class="text-center text-muted py-3 small border-top bg-white">
     &copy; {% now "Y" %} Africa Mobile Networks — Système de Gestion de Stock
   </footer>
+  {% endif %}
 </div>
-
-{% else %}
-<!-- Non-authenticated layout -->
-<div id="main-content" style="margin-left:0">
-  <main class="p-4">{% block content %}{% endblock %}</main>
-</div>
-{% endif %}
 
 <!-- ══════ TOAST CONTAINER ══════ -->
 <div id="toast-container"></div>
