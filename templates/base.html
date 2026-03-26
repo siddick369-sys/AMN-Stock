@@ -132,6 +132,21 @@
     }
   </style>
   {% block extra_css %}{% endblock %}
+
+  <!-- ══════ PWA ══════ -->
+  {% load static %}
+  <!-- Web App Manifest (installabilité Android/Chrome) -->
+  <link rel="manifest" href="{% static 'manifest.json' %}">
+  <!-- Couleur de thème — barre navigateur sur Android -->
+  <meta name="theme-color" content="#0d47a1">
+  <!-- iOS : icône écran d'accueil + comportement standalone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AMN Stock">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <!-- Favicon standard -->
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'icons/favicon-16.png' %}">
 </head>
 <body>
 
@@ -328,5 +343,44 @@ setInterval(pollNotifications, 60000); // poll every 60s
 </script>
 
 {% block extra_js %}{% endblock %}
+
+<!-- ══════ SERVICE WORKER REGISTRATION ══════ -->
+<script>
+(function() {
+  'use strict';
+  if (!('serviceWorker' in navigator)) return; // navigateur non compatible
+
+  // Le SW est servi à la racine (/sw.js) pour obtenir le scope '/'
+  // (un SW dans /static/ n'aurait le scope que sur /static/).
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(reg) {
+        // Vérification périodique des mises à jour (utile sur connexions 3G lentes)
+        reg.update();
+        setInterval(function() { reg.update(); }, 60 * 60 * 1000); // toutes les heures
+
+        // Notification discrète quand une nouvelle version est prête
+        reg.addEventListener('updatefound', function() {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // Une nouvelle version est disponible — affiche un toast discret
+              if (typeof showToast === 'function') {
+                showToast(
+                  'Mise à jour disponible. <a href="" class="text-white fw-bold">Recharger</a>',
+                  'info'
+                );
+              }
+            }
+          });
+        });
+      })
+      .catch(function(err) {
+        console.warn('[PWA] Enregistrement SW échoué :', err);
+      });
+  });
+})();
+</script>
 </body>
 </html>

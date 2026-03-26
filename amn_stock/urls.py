@@ -6,6 +6,11 @@ from stock import views as stock_views
 urlpatterns = [
     path('admin/', admin.site.urls),
 
+    # ── PWA — Service Worker (scope racine obligatoire) + page offline ──
+    path('sw.js',    stock_views.service_worker, name='service_worker'),
+    path('offline/', stock_views.offline_page,   name='offline_page'),
+
+
     # ── Connexion sécurisée (anti brute-force) ──
     path('login/', stock_views.secure_login, name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),

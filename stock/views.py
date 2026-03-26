@@ -1,3 +1,4 @@
+import os
 import json
 from datetime import timedelta
 
@@ -1630,3 +1631,42 @@ def reset_password(request):
         return redirect('/login/?pwd_changed=1')
 
     return render(request, 'registration/reset_password.html', {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PWA — Service Worker + Offline fallback
+# ─────────────────────────────────────────────────────────────────────────────
+
+from django.conf import settings as django_settings
+from django.http import HttpResponse
+from django.views.decorators.cache import cache_control
+
+
+@cache_control(no_cache=True, no_store=True, must_revalidate=True)
+def service_worker(request):
+    """
+    Sert sw.js depuis static/ à la racine /sw.js.
+    Le scope du Service Worker doit être '/' pour intercepter toutes les
+    pages. Un SW servi depuis /static/sw.js n'aurait le scope que sur /static/.
+    L'en-tête Service-Worker-Allowed: / lève la restriction de scope.
+    Cache-Control no-store empêche le navigateur de cacher le SW lui-même
+    (il doit pouvoir détecter les mises à jour).
+    """
+    sw_path = os.path.join(django_settings.BASE_DIR, 'static', 'sw.js')
+    try:
+        with open(sw_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return HttpResponse('// sw.js not found', status=404,
+                            content_type='application/javascript')
+
+    response = HttpResponse(content, content_type='application/javascript; charset=utf-8')
+    # Permet au SW d'avoir le scope '/' même s'il est servi depuis /sw.js
+    response['Service-Worker-Allowed'] = '/'
+    return response
+
+
+def offline_page(request):
+    """Page de fallback affichée par le Service Worker quand l'utilisateur
+    est hors-ligne et que la page n'est pas en cache."""
+    return render(request, 'offline.html')
