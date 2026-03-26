@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -134,7 +135,6 @@
   {% block extra_css %}{% endblock %}
 
   <!-- ══════ PWA ══════ -->
-  {% load static %}
   <!-- Web App Manifest (installabilité Android/Chrome) -->
   <link rel="manifest" href="{% static 'manifest.json' %}">
   <!-- Couleur de thème — barre navigateur sur Android -->

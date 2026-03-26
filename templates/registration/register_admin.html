@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Création du compte administrateur — AMN Stock</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #e65100 0%, #bf360c 40%, #0d47a1 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1.5rem 0;
+    }
+    .auth-card {
+      width: 100%; max-width: 500px;
+      border: none; border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    }
+    .auth-header {
+      background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+      color: #fff; border-radius: 16px 16px 0 0;
+      padding: 1.75rem 2rem; text-align: center;
+    }
+    .auth-header .logo-circle {
+      width: 70px; height: 70px;
+      background: rgba(255,255,255,.18); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto .9rem; font-size: 2rem;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.15);
+    }
+
+    /* Badge "première configuration" */
+    .setup-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+      border-radius: 20px; padding: .25rem .85rem;
+      font-size: .78rem; font-weight: 600;
+    }
+
+    /* Alerte sécurité */
+    .security-notice {
+      background: #fff8e1; border-left: 4px solid #ff8f00;
+      border-radius: 0 8px 8px 0; padding: .85rem 1rem;
+      font-size: .85rem;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: #e65100; box-shadow: 0 0 0 .25rem rgba(230,81,0,.2);
+    }
+    .btn-admin {
+      background: linear-gradient(135deg, #e65100, #bf360c);
+      border: none; color: #fff; font-weight: 600;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-admin:hover { opacity: .92; color: #fff; transform: translateY(-1px); }
+    .btn-admin:active { transform: translateY(0); }
+
+    /* Password strength bar */
+    #pwd-strength-bar {
+      height: 4px; border-radius: 2px; transition: width .3s, background .3s; width: 0;
+    }
+    .strength-weak   { background: #f44336; }
+    .strength-fair   { background: #ff9800; }
+    .strength-good   { background: #4caf50; }
+    .strength-strong { background: #1b5e20; }
+
+    /* Checklist requirements */
+    .req-list { list-style: none; padding: 0; margin: .4rem 0 0; font-size: .82rem; }
+    .req-list li { display: flex; align-items: center; gap: .4rem; color: #888; }
+    .req-list li.ok { color: #2e7d32; }
+    .req-list li i { font-size: .8rem; }
+
+    /* Honeypot */
+    .hp-field { position: absolute; opacity: 0; height: 0; width: 0;
+                overflow: hidden; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<div class="auth-card card">
+  <!-- ══ En-tête ══ -->
+  <div class="auth-header">
+    <div class="logo-circle">
+      <i class="bi bi-shield-lock-fill"></i>
+    </div>
+    <h4 class="mb-1 fw-bold">AMN Stock</h4>
+    <p class="mb-2 opacity-80 small">Africa Mobile Networks — Gestion de Stock</p>
+    <span class="setup-badge">
+      <i class="bi bi-stars"></i> Configuration initiale — Compte Administrateur
+    </span>
+  </div>
+
+  <div class="card-body p-4">
+
+    <!-- Notice de sécurité -->
+    <div class="security-notice mb-4">
+      <i class="bi bi-shield-check me-2 text-warning"></i>
+      <strong>Action unique :</strong> cette page disparaît dès qu'un administrateur est enregistré.
+      Le compte aura un accès complet à l'application (gestion du stock, des utilisateurs et des rapports).
+    </div>
+
+    <!-- Erreurs serveur -->
+    {% if errors %}
+    <div class="alert alert-danger py-2">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <ul class="mb-0 mt-1 ps-3">
+        {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} py-2 small">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post" id="admin-form" novalidate>
+      {% csrf_token %}
+
+      <!-- Honeypot anti-bot -->
+      <div class="hp-field" aria-hidden="true">
+        <input type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
+      <input type="hidden" name="form_time" value="{{ form_time }}">
+
+      <!-- Prénom / Nom -->
+      <div class="row g-3 mb-3">
+        <div class="col">
+          <label class="form-label fw-semibold small">Prénom</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-warning-subtle border-warning-subtle">
+              <i class="bi bi-person text-warning-emphasis"></i>
+            </span>
+            <input type="text" name="first_name" class="form-control"
+                   placeholder="Prénom" value="{{ first_name|default:'' }}"
+                   autocomplete="given-name">
+          </div>
+        </div>
+        <div class="col">
+          <label class="form-label fw-semibold small">Nom</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-warning-subtle border-warning-subtle">
+              <i class="bi bi-person text-warning-emphasis"></i>
+            </span>
+            <input type="text" name="last_name" class="form-control"
+                   placeholder="Nom de famille" value="{{ last_name|default:'' }}"
+                   autocomplete="family-name">
+          </div>
+        </div>
+      </div>
+
+      <!-- Nom d'utilisateur -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">
+          Identifiant administrateur <span class="text-danger">*</span>
+        </label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-warning-subtle border-warning-subtle">
+            <i class="bi bi-person-gear text-warning-emphasis"></i>
+          </span>
+          <input type="text" name="username" class="form-control" id="username-input"
+                 placeholder="admin" value="{{ username|default:'' }}"
+                 autocomplete="username" required autofocus>
+        </div>
+        <div class="form-text">Lettres, chiffres, @/./+/-/_ — minimum 3 caractères.</div>
+      </div>
+
+      <!-- Email -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">
+          Adresse email <span class="text-danger">*</span>
+        </label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-warning-subtle border-warning-subtle">
+            <i class="bi bi-envelope-fill text-warning-emphasis"></i>
+          </span>
+          <input type="email" name="email" class="form-control"
+                 placeholder="admin@amn.africa" value="{{ email|default:'' }}"
+                 autocomplete="email" required>
+        </div>
+        <div class="form-text">Un code OTP de vérification sera envoyé à cette adresse.</div>
+      </div>
+
+      <!-- Mot de passe -->
+      <div class="mb-2">
+        <label class="form-label fw-semibold small">
+          Mot de passe <span class="text-danger">*</span>
+        </label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-warning-subtle border-warning-subtle">
+            <i class="bi bi-lock-fill text-warning-emphasis"></i>
+          </span>
+          <input type="password" name="password" id="pwd" class="form-control"
+                 placeholder="Minimum 8 caractères" autocomplete="new-password" required>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-pwd">
+            <i class="bi bi-eye-fill" id="pwd-eye"></i>
+          </button>
+        </div>
+        <div class="mt-1 bg-light rounded" style="height:4px;">
+          <div id="pwd-strength-bar"></div>
+        </div>
+        <div class="form-text" id="pwd-strength-label"></div>
+
+        <!-- Checklist des exigences -->
+        <ul class="req-list mt-2" id="req-list">
+          <li id="req-len"><i class="bi bi-circle"></i> Au moins 8 caractères</li>
+          <li id="req-case"><i class="bi bi-circle"></i> Majuscule et minuscule</li>
+          <li id="req-num"><i class="bi bi-circle"></i> Au moins un chiffre</li>
+          <li id="req-sym"><i class="bi bi-circle"></i> Caractère spécial (@, #, !, ...)</li>
+        </ul>
+      </div>
+
+      <!-- Confirmation -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">
+          Confirmer le mot de passe <span class="text-danger">*</span>
+        </label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-warning-subtle border-warning-subtle">
+            <i class="bi bi-lock-fill text-warning-emphasis"></i>
+          </span>
+          <input type="password" name="password2" id="pwd2" class="form-control"
+                 placeholder="Répétez le mot de passe" autocomplete="new-password" required>
+        </div>
+        <div class="form-text text-danger d-none" id="pwd-mismatch">
+          <i class="bi bi-x-circle-fill me-1"></i>Les mots de passe ne correspondent pas.
+        </div>
+        <div class="form-text text-success d-none" id="pwd-match">
+          <i class="bi bi-check-circle-fill me-1"></i>Les mots de passe correspondent.
+        </div>
+      </div>
+
+      <!-- Rôle affiché -->
+      <div class="mb-4 p-2 rounded d-flex align-items-center gap-2"
+           style="background:#fbe9e7;border:1px solid #ffccbc;">
+        <i class="bi bi-shield-fill-check text-danger fs-5"></i>
+        <div class="small">
+          <span class="fw-semibold text-danger">Rôle attribué : Administrateur</span><br>
+          <span class="text-muted">Accès complet — gestion du stock, des utilisateurs et des rapports.</span>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-admin w-100 py-2" id="submit-btn">
+        <i class="bi bi-shield-plus me-2"></i>Créer le compte administrateur
+      </button>
+    </form>
+
+    <hr class="my-3">
+    <p class="text-center text-muted small mb-0">
+      <a href="{% url 'login' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Retour à la connexion
+      </a>
+    </p>
+  </div>
+
+  <div class="card-footer text-center text-muted small py-3 border-0">
+    &copy; {% now "Y" %} Africa Mobile Networks
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ── Toggle mot de passe ──
+  document.getElementById('toggle-pwd')?.addEventListener('click', function() {
+    const inp = document.getElementById('pwd');
+    const ico = document.getElementById('pwd-eye');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    ico.className = inp.type === 'password' ? 'bi bi-eye-fill' : 'bi bi-eye-slash-fill';
+  });
+
+  // ── Indicateur de force + checklist ──
+  const pwdInput = document.getElementById('pwd');
+  const bar      = document.getElementById('pwd-strength-bar');
+  const lbl      = document.getElementById('pwd-strength-label');
+
+  function setReq(id, ok) {
+    const li = document.getElementById(id);
+    if (!li) return;
+    li.classList.toggle('ok', ok);
+    li.querySelector('i').className = ok ? 'bi bi-check-circle-fill' : 'bi bi-circle';
+  }
+
+  pwdInput?.addEventListener('input', function() {
+    const v = this.value;
+    setReq('req-len',  v.length >= 8);
+    setReq('req-case', /[A-Z]/.test(v) && /[a-z]/.test(v));
+    setReq('req-num',  /[0-9]/.test(v));
+    setReq('req-sym',  /[^A-Za-z0-9]/.test(v));
+
+    let score = 0;
+    if (v.length >= 8)                       score++;
+    if (v.length >= 12)                      score++;
+    if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+    if (/[0-9]/.test(v))                     score++;
+    if (/[^A-Za-z0-9]/.test(v))             score++;
+
+    const levels = [
+      { pct: '20%', cls: 'strength-weak',   txt: 'Très faible', color: '#f44336' },
+      { pct: '40%', cls: 'strength-fair',   txt: 'Faible',      color: '#ff9800' },
+      { pct: '60%', cls: 'strength-fair',   txt: 'Acceptable',  color: '#ff9800' },
+      { pct: '80%', cls: 'strength-good',   txt: 'Bon',         color: '#4caf50' },
+      { pct: '100%',cls: 'strength-strong', txt: 'Très fort',   color: '#1b5e20' },
+    ];
+    const lvl = levels[Math.min(score, 4)];
+    bar.style.width = v.length ? lvl.pct : '0';
+    bar.className   = lvl.cls;
+    lbl.textContent = v.length ? `Force : ${lvl.txt}` : '';
+    lbl.style.color = v.length ? lvl.color : '';
+
+    // Mettre à jour le feedback de correspondance
+    checkMatch();
+  });
+
+  // ── Correspondance mots de passe ──
+  function checkMatch() {
+    const pwd2   = document.getElementById('pwd2').value;
+    const match  = document.getElementById('pwd-match');
+    const nmatch = document.getElementById('pwd-mismatch');
+    if (!pwd2) { match.classList.add('d-none'); nmatch.classList.add('d-none'); return; }
+    const ok = pwd2 === pwdInput.value;
+    match.classList.toggle('d-none', !ok);
+    nmatch.classList.toggle('d-none', ok);
+  }
+  document.getElementById('pwd2')?.addEventListener('input', checkMatch);
+
+  // ── Bloquer la soumission si les mots de passe ne correspondent pas ──
+  document.getElementById('admin-form')?.addEventListener('submit', function(e) {
+    const pwd  = document.getElementById('pwd').value;
+    const pwd2 = document.getElementById('pwd2').value;
+    if (pwd !== pwd2) {
+      e.preventDefault();
+      document.getElementById('pwd-mismatch').classList.remove('d-none');
+      document.getElementById('pwd2').focus();
+    }
+  });
+</script>
+</body>
+</html>

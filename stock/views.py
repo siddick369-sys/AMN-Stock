@@ -1106,11 +1106,14 @@ def secure_login(request):
             _record_attempt('login_ip', ip, 10, 1800)
             error = 'Identifiants incorrects. Veuillez réessayer.'
 
+    # Afficher le bouton "Créer compte admin" uniquement si aucun admin n'existe
+    no_admin = not User.objects.filter(is_staff=True).exists()
     return render(request, 'registration/login.html', {
         'error':             error,
         'lockout_remaining': lockout_remaining,
         'username':          username_val,
         'next':              request.GET.get('next', ''),
+        'no_admin':          no_admin,
     })
 
 
@@ -1631,6 +1634,138 @@ def reset_password(request):
         return redirect('/login/?pwd_changed=1')
 
     return render(request, 'registration/reset_password.html', {})
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CRÉATION DU PREMIER COMPTE ADMINISTRATEUR
+# ═════════════════════════════════════════════════════════════════════════════
+
+def register_admin(request):
+    """
+    Page de création du premier compte administrateur.
+    Accessible UNE SEULE FOIS : dès qu'un compte staff existe, toute tentative
+    d'accès est redirigée vers la page de connexion.
+    Mêmes protections que l'inscription employé :
+      - Honeypot anti-bot, timing check, rate-limit par IP
+    Le compte admin est créé avec is_staff=True et is_superuser=True,
+    puis soumis à la même vérification email OTP avant activation.
+    """
+    from .models import EmailVerification
+
+    # ── Garde-fou principal ── Si un admin existe déjà → accès interdit
+    if User.objects.filter(is_staff=True).exists():
+        messages.warning(
+            request,
+            'Un compte administrateur existe déjà. Connectez-vous normalement.'
+        )
+        return redirect('login')
+
+    if request.user.is_authenticated:
+        return redirect(_settings.LOGIN_REDIRECT_URL)
+
+    ip     = _get_client_ip(request)
+    now_ts = int(timezone.now().timestamp())
+
+    if request.method == 'POST':
+        # ── Rate-limit IP ──
+        locked, remaining = _is_locked('reg_admin_ip', ip, 3, 3600)
+        if locked:
+            messages.error(request, f'Trop de tentatives. Réessayez dans {remaining // 60} min.')
+            return render(request, 'registration/register_admin.html', {'form_time': now_ts})
+
+        # ── Honeypot ──
+        if request.POST.get('website'):
+            _record_attempt('reg_admin_ip', ip, 3, 3600)
+            return render(request, 'registration/register_admin.html', {'form_time': now_ts})
+
+        # ── Timing check (> 3 s) ──
+        try:
+            form_time = int(request.POST.get('form_time', 0))
+        except ValueError:
+            form_time = 0
+        if (now_ts - form_time) < 3:
+            _record_attempt('reg_admin_ip', ip, 3, 3600)
+            messages.error(request, 'Formulaire soumis trop rapidement. Veuillez réessayer.')
+            return render(request, 'registration/register_admin.html', {'form_time': now_ts})
+
+        # ── Re-vérifier la garde (condition de concurrence) ──
+        if User.objects.filter(is_staff=True).exists():
+            messages.warning(request, 'Un administrateur vient d\'être créé. Connectez-vous.')
+            return redirect('login')
+
+        # ── Champs ──
+        username   = request.POST.get('username',   '').strip()[:150]
+        email      = request.POST.get('email',      '').strip()[:254]
+        first_name = request.POST.get('first_name', '').strip()[:150]
+        last_name  = request.POST.get('last_name',  '').strip()[:150]
+        password   = request.POST.get('password',  '')
+        password2  = request.POST.get('password2', '')
+
+        errors = []
+
+        if not username:
+            errors.append("Le nom d'utilisateur est obligatoire.")
+        elif not re.match(r'^[\w.@+\-]+$', username):
+            errors.append("Nom d'utilisateur invalide (lettres, chiffres, @/./+/-/_ uniquement).")
+        elif len(username) < 3:
+            errors.append("Le nom d'utilisateur doit contenir au moins 3 caractères.")
+        elif User.objects.filter(username=username).exists():
+            errors.append(f'Le nom d\'utilisateur "{username}" est déjà utilisé.')
+
+        if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            errors.append("Une adresse email valide est obligatoire.")
+        elif User.objects.filter(email__iexact=email).exists():
+            errors.append("Cette adresse email est déjà associée à un compte.")
+
+        if len(password) < 8:
+            errors.append("Le mot de passe doit contenir au moins 8 caractères.")
+        if password != password2:
+            errors.append("Les mots de passe ne correspondent pas.")
+
+        if errors:
+            _record_attempt('reg_admin_ip', ip, 3, 3600)
+            return render(request, 'registration/register_admin.html', {
+                'errors':     errors,
+                'form_time':  now_ts,
+                'username':   username,
+                'email':      email,
+                'first_name': first_name,
+                'last_name':  last_name,
+            })
+
+        # ── Créer le compte admin inactif ──
+        admin_user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_active=False,    # activé après vérification email
+            is_staff=True,
+            is_superuser=True,
+        )
+
+        # ── OTP email ──
+        code = _generate_otp()
+        EmailVerification.objects.create(
+            user=admin_user,
+            code=code,
+            expires_at=timezone.now() + timedelta(minutes=10),
+            last_resend_at=timezone.now(),
+        )
+        from .tasks import send_verification_email
+        send_verification_email.delay(admin_user.pk, code)
+
+        _clear_attempts('reg_admin_ip', ip)
+        request.session['pending_verify_uid'] = admin_user.pk
+        messages.success(
+            request,
+            f'Compte administrateur créé ! Un code a été envoyé à {email}. '
+            f'Vérifiez votre boîte mail pour activer le compte.'
+        )
+        return redirect('verify_email')
+
+    return render(request, 'registration/register_admin.html', {'form_time': now_ts})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -157,6 +157,19 @@
         <i class="bi bi-person-plus me-1"></i>Créer un compte
       </a>
     </p>
+
+    {% if no_admin %}
+    <div class="mt-3 p-3 rounded-3 text-center" style="background:#fff3e0;border:1px dashed #e65100;">
+      <p class="mb-2 small fw-semibold text-warning-emphasis">
+        <i class="bi bi-shield-lock-fill me-1"></i>Aucun administrateur configuré
+      </p>
+      <a href="{% url 'register_admin' %}"
+         class="btn btn-sm fw-semibold w-100"
+         style="background:#e65100;color:#fff;border:none;">
+        <i class="bi bi-person-gear me-1"></i>Créer le compte administrateur
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   <div class="card-footer text-center text-muted small py-3 border-0">

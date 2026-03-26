@@ -16,6 +16,7 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
     # ── Inscription + vérification email ──
+    path('register-admin/',  stock_views.register_admin,       name='register_admin'),
     path('register/',        stock_views.register,             name='register'),
     path('verify-email/',    stock_views.verify_email,         name='verify_email'),
     path('resend-code/',     stock_views.resend_verification,  name='resend_verification'),
