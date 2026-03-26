@@ -1,0 +1,158 @@
+################################################################################
+# render.yaml — Infrastructure-as-Code pour Render.com
+# Doc : https://render.com/docs/infrastructure-as-code
+#
+# Services définis :
+#   1. web        — Django / Gunicorn (Web Service)
+#   2. celery     — Celery Worker (Background Worker)
+#   3. celery-beat— Celery Beat scheduler (Background Worker)
+#
+# Dépendances externes (créer manuellement dans Render Dashboard) :
+#   • Redis       — Render Redis (plan free)
+#   • PostgreSQL  — Render PostgreSQL (plan free)
+################################################################################
+
+services:
+  # ── 1. Application Web Django ──────────────────────────────────────────────
+  - type: web
+    name: amn-stock-web
+    runtime: python
+    region: frankfurt          # choisir la région la plus proche de l'Afrique
+    plan: free                 # passer à "starter" en production réelle
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn amn_stock.wsgi:application --workers 2 --threads 2 --timeout 120 --bind 0.0.0.0:$PORT"
+    healthCheckPath: /login/
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true    # Render génère une clé aléatoire sécurisée
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "amn-stock-web.onrender.com"   # remplacer par votre domaine réel
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://amn-stock-web.onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: amn-stock-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: amn-stock-redis
+          type: redis
+          property: connectionString
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp-relay.brevo.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false            # à saisir dans le dashboard (secret)
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GREENAPI_INSTANCE_ID
+        sync: false
+      - key: GREENAPI_TOKEN
+        sync: false
+      - key: GREENAPI_RECIPIENT
+        sync: false
+      - key: LOW_STOCK_THRESHOLD
+        value: "5"
+      - key: FRONTEND_URL
+        value: "https://amn-stock-web.onrender.com"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  # ── 2. Celery Worker ────────────────────────────────────────────────────────
+  - type: worker
+    name: amn-stock-celery
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A amn_stock worker --loglevel=info --concurrency=2"
+    envVars:
+      - key: SECRET_KEY
+        fromService:
+          name: amn-stock-web
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: amn-stock-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: amn-stock-redis
+          type: redis
+          property: connectionString
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp-relay.brevo.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GREENAPI_INSTANCE_ID
+        sync: false
+      - key: GREENAPI_TOKEN
+        sync: false
+      - key: GREENAPI_RECIPIENT
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  # ── 3. Celery Beat (planificateur de tâches périodiques) ───────────────────
+  - type: worker
+    name: amn-stock-celery-beat
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A amn_stock beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    envVars:
+      - key: SECRET_KEY
+        fromService:
+          name: amn-stock-web
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: amn-stock-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: amn-stock-redis
+          type: redis
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+# ── Bases de données managées ─────────────────────────────────────────────────
+databases:
+  - name: amn-stock-db
+    databaseName: amnstock
+    plan: free
+    region: frankfurt
+
+# Note : Redis est déclaré dans le Dashboard Render (type "Redis"),
+# pas dans render.yaml (limitation de la version gratuite).
+# Créez un Redis nommé "amn-stock-redis" et copiez son URL dans
+# la variable CELERY_BROKER_URL des 3 services ci-dessus.
