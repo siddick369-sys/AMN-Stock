@@ -9,6 +9,7 @@ set -o errexit   # quitter immédiatement en cas d'erreur
 echo "==> [1/5] Installation des dépendances Python..."
 pip install --upgrade pip
 pip install -r requirements.txt
+chmod +x start.sh
 
 # ── 2. Fichiers statiques ────────────────────────────────────────────────────
 echo "==> [2/5] Collecte des fichiers statiques (WhiteNoise)..."
