@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}403 - Accès Refusé{% endblock %}
+{% block page_title %}Erreur 403{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+    <i class="bi bi-shield-lock text-warning" style="font-size: 5rem; margin-bottom: 1rem;"></i>
+    <h1 class="display-3 fw-bold text-warning">403</h1>
+    <h3 class="fw-semibold text-dark">Accès Interdit</h3>
+    <p class="text-muted lead mb-4">Vous n'avez pas les permissions nécessaires pour accéder à cette ressource.</p>
+    <a href="/" class="btn btn-warning px-4 py-2 rounded-pill shadow-sm text-dark fw-semibold">
+        <i class="bi bi-house-door me-2"></i>Retour à l'accueil
+    </a>
+</div>
+{% endblock %}
