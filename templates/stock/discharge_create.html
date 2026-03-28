@@ -336,7 +336,7 @@
 <script>
 const EQUIPMENTS = [
   {% for eq in equipments %}
-  { id: {{ eq.id }}, name: "{{ eq.name|escapejs }}", reference: "{{ eq.reference|escapejs }}", stock: {% if is_edit %}{{ eq._available_for_edit|default:eq.quantity }}{% else %}{{ eq.quantity }}{% endif %} }{% if not forloop.last %},{% endif %}
+  { id: {{ eq.id }}, name: "{{ eq.name|escapejs }}", reference: "{{ eq.reference|escapejs }}", stock: {% if is_edit %}{{ eq.available_for_edit|default:eq.quantity }}{% else %}{{ eq.quantity }}{% endif %} }{% if not forloop.last %},{% endif %}
   {% endfor %}
 ];
 const CSRF_TOKEN = "{{ csrf_token }}";
