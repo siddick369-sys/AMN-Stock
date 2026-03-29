@@ -808,7 +808,7 @@ def voice_process_discharge(request):
     extrait la destination et les équipements avec LLaMA, retourne un JSON
     structuré que le JS côté client utilisera pour remplir le formulaire.
 
-    Accessible à tous les utilisateurs authentifiés (techniciens inclus).
+    Accessible à tous les utilisateurs authentifiés (Field Engineers inclus).
     """
     from .voice import process_voice_discharge
     from .models import Equipment

@@ -101,7 +101,7 @@
             'Le menu latéral donne accès à toutes les sections : '
             + '<strong>Dashboard</strong>, <strong>Décharges</strong>, '
             + '<strong>Rapports terrain</strong> et la '
-            + '<strong>Gestion des comptes</strong> (admins uniquement).',
+            + '<strong>Gestion des comptes</strong> (Regional Managers uniquement).',
           side: 'right', align: 'start',
         },
       },
@@ -221,7 +221,7 @@
           description:
             'Cette page centralise toutes les sorties d\'équipements. '
             + 'Chaque décharge représente un ensemble de matériel confié à un '
-            + 'technicien pour une mission terrain.',
+            + 'Field Engineer pour une mission terrain.',
           side: 'over', align: 'center',
         },
       },
@@ -231,7 +231,7 @@
           title: '<i class="bi bi-plus-circle-fill me-1"></i> Nouvelle décharge',
           description:
             'Créez une nouvelle décharge pour enregistrer les équipements '
-            + 'remis à un technicien avant une mission.',
+            + 'remis à un Field Engineer avant une mission.',
           side: 'bottom', align: 'end',
         },
       },
@@ -240,7 +240,7 @@
         popover: {
           title: '<i class="bi bi-funnel-fill me-1"></i> Filtres de recherche',
           description:
-            'Filtrez les décharges par <strong>technicien</strong>, '
+            'Filtrez les décharges par <strong>Field Engineer</strong>, '
             + '<strong>statut</strong> (En cours / Clôturée) ou '
             + '<strong>période de date</strong> pour retrouver rapidement une mission.',
           side: 'bottom', align: 'start',
@@ -251,7 +251,7 @@
         popover: {
           title: '<i class="bi bi-table me-1"></i> Liste des décharges',
           description:
-            'Le tableau affiche toutes les décharges avec leur technicien, '
+            'Le tableau affiche toutes les décharges avec leur Field Engineer, '
             + 'destination, date et statut. Cliquez sur '
             + '<i class="bi bi-eye-fill"></i> pour voir le détail, '
             + '<i class="bi bi-pencil-fill"></i> pour modifier (si en cours), '
@@ -296,7 +296,7 @@
           title: '<i class="bi bi-plus-circle-fill me-1"></i> Créer une décharge',
           description:
             'Ce formulaire vous permet d\'enregistrer les équipements remis à un '
-            + 'technicien avant une mission. Vous pouvez le remplir '
+            + 'Field Engineer avant une mission. Vous pouvez le remplir '
             + '<strong>manuellement</strong> ou par <strong>commande vocale</strong>.',
           side: 'over', align: 'center',
         },
@@ -392,7 +392,7 @@
           title: '<i class="bi bi-box-arrow-up-right me-1"></i> Détail de la décharge',
           description:
             'Cette page affiche toutes les informations d\'une décharge : '
-            + 'technicien assigné, destination, date de départ et liste complète '
+            + 'Field Engineer assigné, destination, date de départ et liste complète '
             + 'des équipements emportés.',
           side: 'over', align: 'center',
         },
@@ -402,7 +402,7 @@
         popover: {
           title: '<i class="bi bi-info-circle-fill me-1"></i> Informations de la décharge',
           description:
-            'Retrouvez ici le technicien responsable, la destination de la mission, '
+            'Retrouvez ici le Field Engineer responsable, la destination de la mission, '
             + 'la date de départ et le statut actuel '
             + '(<strong>En cours</strong> ou <strong>Clôturée</strong>).',
           side: 'bottom', align: 'start',
@@ -464,7 +464,7 @@
         popover: {
           title: '<i class="bi bi-table me-1"></i> Historique des rapports',
           description:
-            'Le tableau affiche le technicien, la décharge associée, la destination '
+            'Le tableau affiche le Field Engineer, la décharge associée, la destination '
             + 'et la date de retour. Cliquez sur '
             + '<i class="bi bi-eye-fill"></i> pour consulter le rapport complet.',
           side: 'top', align: 'start',
@@ -518,7 +518,7 @@
           description:
             'Décrivez en détail les travaux effectués, les difficultés rencontrées, '
             + 'l\'état du site, etc. Ce champ est <strong>obligatoire</strong> '
-            + 'et sera visible par les administrateurs.',
+            + 'et sera visible par les Regional Managers.',
           side: 'bottom', align: 'start',
         },
       },
@@ -570,7 +570,7 @@
           title: '<i class="bi bi-file-earmark-check-fill me-1"></i> Rapport de mission',
           description:
             'Cette page affiche le compte-rendu complet d\'une mission : '
-            + 'informations du technicien, date de retour, rapport écrit '
+            + 'informations du Field Engineer, date de retour, rapport écrit '
             + 'et récapitulatif des équipements ramenés.',
           side: 'over', align: 'center',
         },
@@ -580,7 +580,7 @@
         popover: {
           title: '<i class="bi bi-info-circle-fill me-1"></i> Informations de mission',
           description:
-            'Retrouvez ici le technicien, la date de retour, la destination '
+            'Retrouvez ici le Field Engineer, la date de retour, la destination '
             + 'et le rapport narratif complet de ce qui s\'est passé sur le terrain.',
           side: 'bottom', align: 'start',
         },
@@ -621,9 +621,9 @@
         popover: {
           title: '<i class="bi bi-people-fill me-1"></i> Gestion des comptes',
           description:
-            'Cette section (réservée aux administrateurs) permet de gérer '
-            + 'tous les utilisateurs de l\'application : créer des techniciens, '
-            + 'promouvoir un admin ou désactiver un compte.',
+            'Cette section (réservée aux Regional Managers) permet de gérer '
+            + 'tous les utilisateurs de l\'application : créer des Field Engineers, '
+            + 'promouvoir un Regional Manager ou désactiver un compte.',
           side: 'over', align: 'center',
         },
       },
@@ -658,7 +658,7 @@
           title: '<i class="bi bi-table me-1"></i> Liste des utilisateurs',
           description:
             'Le tableau affiche tous les comptes avec leur rôle '
-            + '(<strong>Admin</strong> ou <strong>Technicien</strong>), '
+            + '(<strong>Regional Manager</strong> ou <strong>Field Engineer</strong>), '
             + 'leur date d\'inscription et leur dernière connexion. '
             + 'Utilisez les boutons d\'action pour modifier ou supprimer un compte.',
           side: 'top', align: 'start',
@@ -668,8 +668,8 @@
         popover: {
           title: '<i class="bi bi-shield-fill-check me-1"></i> Rôles et permissions',
           description:
-            '<strong>Technicien</strong> : peut créer des décharges et des rapports de terrain.<br>'
-            + '<strong>Admin</strong> : accès complet — dashboard, inventaire, '
+            '<strong>Field Engineer</strong> : peut créer des décharges et des rapports de terrain.<br>'
+            + '<strong>Regional Manager</strong> : accès complet — dashboard, inventaire, '
             + 'gestion des comptes et alertes stock.',
           side: 'over', align: 'center',
         },
@@ -678,7 +678,7 @@
         popover: {
           title: '✅ Gestion des comptes maîtrisée !',
           description:
-            'Créez les comptes de vos techniciens ici. Ils pourront se connecter '
+            'Créez les comptes de vos Field Engineers ici. Ils pourront se connecter '
             + 'immédiatement après création. Le bouton <strong>?</strong> '
             + 'relance ce tutoriel à tout moment.',
           side: 'over', align: 'center',
