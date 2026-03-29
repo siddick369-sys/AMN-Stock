@@ -1035,6 +1035,48 @@ def _generate_otp():
     return f'{100000 + secrets.randbelow(900000)}'
 
 
+import logging as _logging
+_otp_logger = _logging.getLogger(__name__)
+
+def _send_otp_email(user, code):
+    """
+    Envoie l'email OTP directement (synchrone) sans passer par Celery.
+    Utilisé pour l'inscription et la création de compte admin — étapes
+    critiques qui ne doivent pas dépendre de la disponibilité du worker.
+    Retourne True si envoi réussi, False sinon (l'erreur est loguée).
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    try:
+        subject = "[AMN Stock] Vérification de votre compte"
+        text_body = (
+            f"Bonjour {user.get_full_name() or user.username},\n\n"
+            f"Votre code de vérification AMN Stock est :\n\n"
+            f"    {code}\n\n"
+            f"Ce code est valable 10 minutes.\n\n"
+            f"Si vous n'avez pas créé de compte, ignorez cet email.\n\n"
+            f"— Africa Mobile Networks"
+        )
+        html_body = render_to_string('emails/verification.html', {
+            'user': user,
+            'code': code,
+        })
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=_settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
+        _otp_logger.info("OTP envoyé à %s (user=%d)", user.email, user.pk)
+        return True
+    except Exception as exc:
+        _otp_logger.error("Échec envoi OTP à %s (user=%d) : %s", user.email, user.pk, exc)
+        return False
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # CONNEXION SÉCURISÉE (remplace LoginView)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1223,9 +1265,12 @@ def register(request):
             last_resend_at=timezone.now(),
         )
 
-        # ── Envoyer l'email via Celery ──
-        from .tasks import send_verification_email
-        send_verification_email.delay(user.pk, code)
+        # ── Envoyer l'OTP directement (synchrone) ──
+        # Pas de Celery pour cette étape critique : garantit la réception
+        # immédiate même si le worker est endormi (Render free tier).
+        sent = _send_otp_email(user, code)
+        if not sent:
+            messages.warning(request, 'Compte créé mais l\'email n\'a pas pu être envoyé. Contactez un administrateur.')
 
         _clear_attempts('register_ip', ip)
         request.session['pending_verify_uid'] = user.pk
@@ -1355,8 +1400,7 @@ def resend_verification(request):
 
     _clear_attempts('verify_otp', str(uid))
 
-    from .tasks import send_verification_email
-    send_verification_email.delay(pending_user.pk, code)
+    _send_otp_email(pending_user, code)
 
     messages.success(request, f'Un nouveau code a été envoyé à {pending_user.email}.')
     return redirect('verify_email')
@@ -1753,8 +1797,9 @@ def register_admin(request):
             expires_at=timezone.now() + timedelta(minutes=10),
             last_resend_at=timezone.now(),
         )
-        from .tasks import send_verification_email
-        send_verification_email.delay(admin_user.pk, code)
+        sent = _send_otp_email(admin_user, code)
+        if not sent:
+            messages.warning(request, 'Compte créé mais l\'email n\'a pas pu être envoyé. Vérifiez la configuration SMTP.')
 
         _clear_attempts('reg_admin_ip', ip)
         request.session['pending_verify_uid'] = admin_user.pk
