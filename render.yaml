@@ -6,23 +6,26 @@
 # Cache / Broker  : Upstash Redis (externe — upstash.com)
 #
 # Services Render :
-#   1. amn-stock-web        — Django / Gunicorn  (Web Service)
-#   2. amn-stock-celery     — Celery Worker       (Background Worker)
-#   3. amn-stock-celery-beat— Celery Beat         (Background Worker)
+#   1. amn-stock-web — Django / Gunicorn (Web Service, plan Free)
 #
-# Variables à renseigner manuellement dans le Dashboard Render
-# (marquées sync: false) AVANT le premier déploiement :
+# ⚠️  Pas de workers Celery permanents (non disponibles sur le plan Free).
+#     Les tâches background (WhatsApp, IA) sont traitées par un worker
+#     éphémère déclenché via cron-job.org → /tasks/trigger-celery/
 #
-#   DATABASE_URL        → NeonDB → Connection string (mode "pooled")
-#                         Format : postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/dbname?sslmode=require
-#   CELERY_BROKER_URL   → Upstash → Redis URL
-#                         Format : rediss://default:TOKEN@HOST:PORT
-#   SECRET_KEY          → chaîne aléatoire longue (min 50 chars)
-#   EMAIL_HOST_USER     → login SMTP Brevo
-#   EMAIL_HOST_PASSWORD → mot de passe SMTP Brevo
-#   DEFAULT_FROM_EMAIL  → ex: noreply@amn.africa
-#   ADMIN_EMAIL         → ex: admin@amn.africa
-#   GROQ_API_KEY        → console.groq.com/keys
+# Variables à renseigner dans le Dashboard Render (sync: false) :
+#
+#   DATABASE_URL          → NeonDB pooled
+#                           postgresql://user:pass@ep-xxx-pooler.region.neon.tech/db?sslmode=require
+#   CELERY_BROKER_URL     → Upstash Redis
+#                           rediss://default:TOKEN@HOST:PORT
+#   SECRET_KEY            → chaîne aléatoire (min 50 chars)
+#   CRON_TRIGGER_TOKEN    → token hex 64 chars
+#                           générer : python -c "import secrets; print(secrets.token_hex(32))"
+#   EMAIL_HOST_USER       → login SMTP Brevo
+#   EMAIL_HOST_PASSWORD   → clé API SMTP Brevo
+#   DEFAULT_FROM_EMAIL    → ex: noreply@amn.africa
+#   ADMIN_EMAIL           → ex: admin@amn.africa
+#   GROQ_API_KEY          → console.groq.com/keys
 #   GREENAPI_INSTANCE_ID / GREENAPI_TOKEN / GREENAPI_RECIPIENT → green-api.com
 ################################################################################
 
@@ -106,6 +109,12 @@ services:
 
       - key: FRONTEND_URL
         value: "https://amn-stock-web.onrender.com"  # ⚠️ remplacer par votre domaine
+
+      # ── Cron Pseudo-Worker ──
+      # Token hex 64 chars — générer : python -c "import secrets; print(secrets.token_hex(32))"
+      # ⚠️  NE PAS utiliser de caractères spéciaux (# & ^ * {}) — ils cassent l'URL cron-job.org
+      - key: CRON_TRIGGER_TOKEN
+        sync: false                          # ⚠️ OBLIGATOIRE — à saisir dans Dashboard
 
       - key: PYTHON_VERSION
         value: "3.11.0"

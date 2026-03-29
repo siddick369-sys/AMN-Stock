@@ -1077,6 +1077,43 @@ def _send_otp_email(user, code):
         return False
 
 
+def _send_password_reset_email_sync(user, code):
+    """
+    Envoie l'email de réinitialisation de mot de passe directement (synchrone).
+    Même principe que _send_otp_email : pas de Celery pour les emails OTP.
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    try:
+        expiry = getattr(user, '_reset_expiry_minutes', 10)
+        subject = "[AMN Stock] Réinitialisation de votre mot de passe"
+        text_body = (
+            f"Bonjour {user.get_full_name() or user.username},\n\n"
+            f"Votre code de réinitialisation AMN Stock est :\n\n"
+            f"    {code}\n\n"
+            f"Ce code est valable {expiry} minutes.\n\n"
+            f"Si vous n'avez pas demandé de réinitialisation, ignorez cet email "
+            f"et votre mot de passe restera inchangé.\n\n"
+            f"— Africa Mobile Networks"
+        )
+        html_body = render_to_string('emails/password_reset.html', {
+            'user': user,
+            'code': code,
+        })
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=_settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
+        _otp_logger.info("Reset OTP envoyé à %s (user=%d)", user.email, user.pk)
+    except Exception as exc:
+        _otp_logger.error("Échec envoi reset OTP à %s (user=%d) : %s", user.email, user.pk, exc)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # CONNEXION SÉCURISÉE (remplace LoginView)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1481,9 +1518,7 @@ def forgot_password(request):
             )
             # Passer l'expiry aux minutes pour le template email
             user_found._reset_expiry_minutes = PasswordReset.CODE_EXPIRY_MINUTES
-
-            from .tasks import send_password_reset_email
-            send_password_reset_email.delay(user_found.pk, code)
+            _send_password_reset_email_sync(user_found, code)
 
             request.session['reset_uid']   = user_found.pk
             request.session['reset_pr_id'] = pr.pk
@@ -1613,8 +1648,7 @@ def resend_reset_code(request):
 
     user_obj = pr.user
     user_obj._reset_expiry_minutes = PasswordReset.CODE_EXPIRY_MINUTES
-    from .tasks import send_password_reset_email
-    send_password_reset_email.delay(user_obj.pk, code)
+    _send_password_reset_email_sync(user_obj, code)
 
     messages.success(request, f'Un nouveau code a été envoyé à {user_obj.email}.')
     return redirect('reset_verify')

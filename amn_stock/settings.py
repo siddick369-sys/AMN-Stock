@@ -138,6 +138,13 @@ CACHES = {
 # Low stock threshold
 LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
 
+# ── Cron Pseudo-Worker ──────────────────────────────────────────────────────
+# Token secret protégeant le webhook /tasks/trigger-celery/
+# Générer avec : python -c "import secrets; print(secrets.token_hex(32))"
+# ⚠️  Utiliser uniquement des caractères alphanumériques (hex) pour éviter
+#     les problèmes d'encodage URL dans cron-job.org
+CRON_TRIGGER_TOKEN = os.environ.get('CRON_TRIGGER_TOKEN', '')
+
 # ── Groq AI ────────────────────────────────────────────────────────────────
 # Obtenir la clé sur https://console.groq.com/keys
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
