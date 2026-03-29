@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}dashboard{% endblock %}
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}<i class="bi bi-speedometer2 me-2"></i>Dashboard — Gestion de Stock{% endblock %}
 
@@ -53,7 +54,7 @@
 {% block content %}
 
 <!-- ── Stat cards ── -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4" id="tour-stat-cards">
   <div class="col-sm-6 col-xl-3">
     <div class="card stat-card h-100">
       <div class="card-body d-flex align-items-center gap-3">
@@ -116,11 +117,11 @@
         </div>
       </form>
       <!-- Hub alert -->
-      <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#hubModal">
+      <button id="tour-btn-hub" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#hubModal">
         <i class="bi bi-bell-fill me-1"></i>Alerter le Hub
       </button>
       <!-- Add equipment -->
-      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+      <button id="tour-btn-add" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
         <i class="bi bi-plus-lg me-1"></i>Ajouter
       </button>
     </div>
@@ -371,7 +372,7 @@
         <form id="add-form">
           <div class="mb-3">
             <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" name="name" placeholder="Ex: Routeur 4G LTE" required>
+            <input type="text" class="form-control" id="add-name-input" name="name" placeholder="Ex: Routeur 4G LTE" required>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Référence <span class="text-danger">*</span></label>
