@@ -78,11 +78,15 @@ class TaskTriggerView(View):
             return JsonResponse({'error': 'Unauthorized'}, status=401)
 
         # ── 2. Verrou anti-concurrence ────────────────────────────────────────
-        # cache.add() est atomique : retourne True uniquement si la clé est absente
-        locked = cache.add(_LOCK_KEY, timezone.now().isoformat(), _LOCK_TTL)
-        if not locked:
-            logger.info("TaskTriggerView : verrou actif, exécution déjà en cours — skipped.")
-            return JsonResponse({'status': 'skipped', 'reason': 'worker_already_running'})
+        # Si Redis est indisponible, cache.add() lève une exception.
+        # On continue sans verrou plutôt que de planter la vue.
+        try:
+            locked = cache.add(_LOCK_KEY, timezone.now().isoformat(), _LOCK_TTL)
+            if not locked:
+                logger.info("TaskTriggerView : verrou actif, exécution déjà en cours — skipped.")
+                return JsonResponse({'status': 'skipped', 'reason': 'worker_already_running'})
+        except Exception as exc:
+            logger.warning("TaskTriggerView : verrou Redis indisponible (%s) — on continue sans verrou.", exc)
 
         # ── 3. Lancement non-bloquant (thread daemon) ─────────────────────────
         t = threading.Thread(target=self._run_all_tasks, daemon=True)

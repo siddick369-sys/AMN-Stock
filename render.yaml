@@ -47,7 +47,7 @@ services:
         sync: false                          # ⚠️ OBLIGATOIRE — à saisir dans Dashboard
 
       - key: DEBUG
-        value: "True"
+        value: "False"
 
       - key: ALLOWED_HOSTS
         value: "amn-stock-web.onrender.com"  # ⚠️ remplacer par votre domaine réel
