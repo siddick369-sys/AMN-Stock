@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% block body_page_id %}field_report_list{% endblock %}
 {% block title %}Rapports de terrain{% endblock %}
 {% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapports de terrain{% endblock %}
 
 {% block content %}
-<div class="card table-card">
+<div class="card table-card" id="tour-report-table">
   <div class="card-header bg-white px-4 py-3">
     <h6 class="mb-0 fw-semibold">Historique des rapports de mission</h6>
   </div>

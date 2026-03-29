@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% block body_page_id %}discharge_detail{% endblock %}
 {% block title %}Décharge #{{ discharge.pk }}{% endblock %}
 {% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Décharge #{{ discharge.pk }}{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
-    <div class="card table-card mb-4">
+    <div class="card table-card mb-4" id="tour-discharge-detail-card">
       <div class="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold">Détails de la décharge</h6>
         {% if discharge.status == 'open' %}
@@ -75,7 +76,7 @@
       <div class="card-body p-4 text-center">
         <i class="bi bi-file-earmark-plus display-4 text-warning mb-3 d-block"></i>
         <p class="mb-3">Aucun rapport de retour n'a encore été soumis pour cette décharge.</p>
-        <a href="{% url 'field_report_create' discharge.pk %}" class="btn btn-warning">
+        <a href="{% url 'field_report_create' discharge.pk %}" class="btn btn-warning" id="tour-btn-create-report">
           <i class="bi bi-file-earmark-plus-fill me-1"></i>Créer le rapport de retour
         </a>
       </div>

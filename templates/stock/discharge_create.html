@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}discharge_create{% endblock %}
 {% block title %}{% if is_edit %}Modifier la décharge #{{ discharge.pk }}{% else %}Nouvelle Décharge{% endif %}{% endblock %}
 {% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>{% if is_edit %}Modifier la décharge <span class="text-muted fw-normal">#{{ discharge.pk }}</span>{% else %}Nouvelle Décharge{% endif %}{% endblock %}
 
@@ -138,7 +139,7 @@
           <h6 class="mb-0 fw-semibold">Formulaire de décharge d'équipements</h6>
           <small class="text-muted">Les quantités demandées seront déduites du stock global après validation.</small>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" onclick="openVoiceModal()" title="Remplir par commande vocale">
+        <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" id="tour-btn-voice" onclick="openVoiceModal()" title="Remplir par commande vocale">
           <i class="bi bi-mic-fill me-1"></i> Assistant vocal
         </button>
       </div>

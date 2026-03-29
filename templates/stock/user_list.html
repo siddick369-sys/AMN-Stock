@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}user_list{% endblock %}
 {% block title %}Gestion des comptes{% endblock %}
 {% block page_title %}<i class="bi bi-people-fill me-2"></i>Gestion des comptes{% endblock %}
 
@@ -103,7 +104,7 @@
   <p class="text-muted mb-0">
     <strong>{{ page_obj.paginator.count }}</strong> utilisateur(s) enregistré(s).
   </p>
-  <button class="btn btn-primary btn-sm" onclick="openCreateModal()">
+  <button class="btn btn-primary btn-sm" id="tour-btn-new-user" onclick="openCreateModal()">
     <i class="bi bi-person-plus-fill me-1"></i>Ajouter un utilisateur
   </button>
 </div>
@@ -142,7 +143,7 @@
 </form>
 
 <!-- ── Table ── -->
-<div class="card table-card">
+<div class="card table-card" id="tour-user-table">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
       <thead>

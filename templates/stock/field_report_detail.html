@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}field_report_detail{% endblock %}
 {% block title %}Rapport #{{ report.pk }}{% endblock %}
 {% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapport de terrain #{{ report.pk }}{% endblock %}
 
@@ -7,7 +8,7 @@
   <div class="col-lg-9">
 
     <!-- Header info -->
-    <div class="card table-card mb-4">
+    <div class="card table-card mb-4" id="tour-report-detail-card">
       <div class="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold">Informations de la mission</h6>
         <span class="badge bg-success rounded-pill px-3"><i class="bi bi-check-circle-fill me-1"></i>Mission clôturée</span>

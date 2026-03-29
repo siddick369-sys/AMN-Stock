@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}discharge_list{% endblock %}
 {% block title %}Décharges{% endblock %}
 {% block page_title %}<i class="bi bi-box-arrow-up-right me-2"></i>Mes Décharges{% endblock %}
 
@@ -8,13 +9,13 @@
   <p class="text-muted mb-0">
     <strong>{{ page_obj.paginator.count }}</strong> décharge(s) au total.
   </p>
-  <a href="{% url 'discharge_create' %}" class="btn btn-primary btn-sm">
+  <a href="{% url 'discharge_create' %}" class="btn btn-primary btn-sm" id="tour-btn-new-discharge">
     <i class="bi bi-plus-lg me-1"></i>Nouvelle décharge
   </a>
 </div>
 
 <!-- ── Filtres ── -->
-<form method="get" class="card table-card mb-3">
+<form method="get" class="card table-card mb-3" id="tour-discharge-filters">
   <div class="card-body py-3 px-4">
     <div class="row g-2 align-items-end">
       <div class="col-md-4">
@@ -53,7 +54,7 @@
 </form>
 
 <!-- ── Tableau ── -->
-<div class="card table-card">
+<div class="card table-card" id="tour-discharge-table">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
       <thead>

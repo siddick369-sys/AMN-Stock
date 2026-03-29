@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_page_id %}field_report_create{% endblock %}
 {% block title %}Rapport de terrain — Décharge #{{ discharge.pk }}{% endblock %}
 {% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>Rapport de terrain — Décharge #{{ discharge.pk }}{% endblock %}
 
@@ -25,7 +26,7 @@
           {% csrf_token %}
 
           <!-- Description -->
-          <div class="mb-4">
+          <div class="mb-4" id="tour-report-description">
             <label class="form-label fw-semibold">
               <i class="bi bi-journal-text me-1"></i>Rapport détaillé des actions sur le terrain
               <span class="text-danger">*</span>
@@ -45,7 +46,7 @@
           </p>
 
           {% for item in discharge_items %}
-          <div class="return-row">
+          <div class="return-row" {% if forloop.first %}id="tour-report-condition"{% endif %}>
             <div class="row g-3 align-items-center">
               <div class="col-md-5">
                 <div class="fw-semibold">{{ item.equipment.name }}</div>

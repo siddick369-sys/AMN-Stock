@@ -2,15 +2,15 @@
  * AMN-Stock — Tutoriel interactif (driver.js v1.x)
  * ─────────────────────────────────────────────────
  * Le tour est défini par page via data-page="{{ url_name }}" sur <body>.
- * Pour l'instant : tutoriel complet sur le Dashboard.
- *
- * Flux spécial — Modal "Ajouter un équipement" :
- *   Étape 6 → highlight bouton Ajouter
- *   onNextClick → ouvre le modal Bootstrap programmatiquement
- *     → attend l'événement "shown.bs.modal" (fin d'animation CSS)
- *     → avance vers l'étape 7 (champ Nom inside le modal)
- *   onDeselected étape 7 → ferme le modal proprement
- *   onDestroyStarted global → ferme le modal si le tour est quitté en cours
+ * Pages couvertes :
+ *   - dashboard        (10 étapes, modal addModal async)
+ *   - discharge_list   (6 étapes)
+ *   - discharge_create (7 étapes, modal voiceModal async)
+ *   - discharge_detail (5 étapes)
+ *   - field_report_list   (4 étapes)
+ *   - field_report_create (5 étapes)
+ *   - field_report_detail (4 étapes)
+ *   - user_list        (6 étapes, modal userModal async)
  */
 
 (function () {
@@ -25,21 +25,22 @@
   const { driver } = window.driver.js;
 
   /* ── Helpers ──────────────────────────────────────────────────────────── */
-  const STORAGE_KEY = 'amn_tour_v1_done';
+  const STORAGE_KEY = 'amn_tour_v2_done';
 
-  /** Ouvre le modal Bootstrap addModal en supprimant son backdrop natif
-   *  (driver.js fournit déjà son propre overlay sombre). */
-  function openAddModal(onShown) {
-    const modalEl = document.getElementById('addModal');
+  /**
+   * Ouvre un modal Bootstrap en supprimant son backdrop natif
+   * (driver.js fournit déjà son propre overlay sombre).
+   * Appelle onShown() après la fin de l'animation CSS.
+   */
+  function openModal(modalId, onShown) {
+    const modalEl = document.getElementById(modalId);
     if (!modalEl) { onShown(); return; }
 
-    // backdrop:false → pas de double fond sombre (driver.js en a déjà un)
     const bsModal = new bootstrap.Modal(modalEl, {
       backdrop: false,
       keyboard: false,
     });
 
-    /* Écoute la fin de l'animation CSS avant d'avancer le tour */
     modalEl.addEventListener('shown.bs.modal', function handler() {
       modalEl.removeEventListener('shown.bs.modal', handler);
       onShown();
@@ -48,19 +49,40 @@
     bsModal.show();
   }
 
-  /** Ferme le modal addModal s'il est ouvert. */
-  function closeAddModal() {
-    const modalEl = document.getElementById('addModal');
+  /** Ferme un modal Bootstrap s'il est ouvert. */
+  function closeModal(modalId) {
+    const modalEl = document.getElementById(modalId);
     if (!modalEl) return;
     const bsModal = bootstrap.Modal.getInstance(modalEl);
     if (bsModal) bsModal.hide();
   }
 
-  /* ── Définition des étapes du tutoriel Dashboard ──────────────────────── */
+  /* ── Options communes à tous les tours ───────────────────────────────── */
+  function commonOpts(extraOpts) {
+    return Object.assign({
+      animate: true,
+      overlayColor: '#000',
+      overlayOpacity: 0.72,
+      smoothScroll: true,
+      allowKeyboardControl: true,
+      allowClose: false,
+      showProgress: true,
+      progressText: 'Étape {{current}} sur {{total}}',
+      nextBtnText: 'Suivant →',
+      prevBtnText: '← Précédent',
+      doneBtnText: 'Terminer ✓',
+      popoverClass: 'amn-tour-popover',
+      onDestroyed: () => {
+        localStorage.setItem(STORAGE_KEY, '1');
+      },
+    }, extraOpts);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * DASHBOARD
+   * ════════════════════════════════════════════════════════════════════════ */
   function buildDashboardSteps() {
     return [
-
-      /* ── Étape 1 : Bienvenue (popover centré, aucun élément ciblé) ── */
       {
         popover: {
           title: '👋 Bienvenue sur AMN Stock !',
@@ -68,12 +90,9 @@
             'Ce court tutoriel vous guide à travers les fonctionnalités '
             + 'principales de l\'application. Utilisez les flèches ou les '
             + 'touches ← → du clavier pour naviguer.',
-          side: 'over',
-          align: 'center',
+          side: 'over', align: 'center',
         },
       },
-
-      /* ── Étape 2 : Sidebar ── */
       {
         element: '#sidebar',
         popover: {
@@ -83,27 +102,20 @@
             + '<strong>Dashboard</strong>, <strong>Décharges</strong>, '
             + '<strong>Rapports terrain</strong> et la '
             + '<strong>Gestion des comptes</strong> (admins uniquement).',
-          side: 'right',
-          align: 'start',
+          side: 'right', align: 'start',
         },
       },
-
-      /* ── Étape 3 : Cloche de notifications ── */
       {
         element: '#notif-btn',
         popover: {
           title: '<i class="bi bi-bell-fill me-1"></i> Alertes stock',
           description:
             'Cette cloche se colore en rouge dès qu\'un équipement passe '
-            + 'en <strong>stock critique</strong> (en dessous du seuil '
-            + 'configuré). Un email et une alerte WhatsApp sont également '
-            + 'envoyés automatiquement.',
-          side: 'bottom',
-          align: 'end',
+            + 'en <strong>stock critique</strong>. Un email et une alerte '
+            + 'WhatsApp sont également envoyés automatiquement.',
+          side: 'bottom', align: 'end',
         },
       },
-
-      /* ── Étape 4 : Cartes statistiques ── */
       {
         element: '#tour-stat-cards',
         popover: {
@@ -112,12 +124,9 @@
             'Vue d\'ensemble en temps réel : nombre total d\'équipements, '
             + 'articles en stock faible, décharges actives et '
             + 'unités totales disponibles.',
-          side: 'bottom',
-          align: 'start',
+          side: 'bottom', align: 'start',
         },
       },
-
-      /* ── Étape 5 : Tableau d'inventaire ── */
       {
         element: '#equipment-table',
         popover: {
@@ -126,14 +135,9 @@
             'Liste complète de vos équipements avec leur stock et leur statut. '
             + 'Vous pouvez <strong>modifier</strong> ou <strong>supprimer</strong> '
             + 'un équipement via les boutons de chaque ligne.',
-          side: 'top',
-          align: 'start',
+          side: 'top', align: 'start',
         },
       },
-
-      /* ── Étape 6 : Bouton "Ajouter" ──────────────────────────────────────
-         onNextClick ouvre le modal Bootstrap puis avance le tour
-         une fois l'animation terminée (shown.bs.modal).              ── */
       {
         element: '#tour-btn-add',
         popover: {
@@ -141,23 +145,12 @@
           description:
             'Cliquez sur <strong>Suivant</strong> pour voir comment créer '
             + 'un nouvel équipement dans le formulaire.',
-          side: 'bottom',
-          align: 'end',
+          side: 'bottom', align: 'end',
         },
-        onNextClick: (_el, _step, { driver: driverInstance }) => {
-          /* On ouvre le modal AVANT d'avancer.
-             driver.moveNext() est appelé uniquement depuis le callback
-             "shown.bs.modal" pour garantir que le DOM est prêt. */
-          openAddModal(() => {
-            driverInstance.moveNext();
-          });
-          /* ⚠️ On ne retourne rien → driver.js attend moveNext() manuel */
+        onNextClick: (_el, _step, { driver: d }) => {
+          openModal('addModal', () => { d.moveNext(); });
         },
       },
-
-      /* ── Étape 7 : Champ "Nom" à l'intérieur du modal ───────────────────
-         onDeselected ferme le modal quand l'utilisateur quitte cette étape
-         (Suivant, Précédent ou fermeture du tour).                   ── */
       {
         element: '#add-name-input',
         popover: {
@@ -166,19 +159,11 @@
             'Saisissez ici le nom complet de l\'équipement '
             + '(ex&nbsp;: <em>Routeur 4G LTE</em>). '
             + 'Les champs <strong>Référence</strong> et '
-            + '<strong>Quantité</strong> sont également obligatoires '
-            + 'pour enregistrer l\'article.',
-          side: 'bottom',
-          align: 'start',
+            + '<strong>Quantité</strong> sont également obligatoires.',
+          side: 'bottom', align: 'start',
         },
-        onDeselected: () => {
-          /* Ferme proprement le modal quelle que soit la raison
-             (clic Suivant, Précédent, ou abandon du tour). */
-          closeAddModal();
-        },
+        onDeselected: () => { closeModal('addModal'); },
       },
-
-      /* ── Étape 8 : Bouton "Alerter le Hub" ── */
       {
         element: '#tour-btn-hub',
         popover: {
@@ -187,12 +172,9 @@
             'Signalez des équipements défectueux directement au Hub central. '
             + 'Une notification WhatsApp est envoyée automatiquement '
             + 'à l\'équipe de maintenance.',
-          side: 'bottom',
-          align: 'end',
+          side: 'bottom', align: 'end',
         },
       },
-
-      /* ── Étape 9 : Lien Décharges ── */
       {
         element: '#nav-discharges',
         popover: {
@@ -202,12 +184,9 @@
             + 'Chaque décharge est tracée et peut être créée par '
             + '<strong>formulaire manuel</strong> ou par '
             + '<strong>commande vocale</strong> grâce à l\'assistant IA.',
-          side: 'right',
-          align: 'center',
+          side: 'right', align: 'center',
         },
       },
-
-      /* ── Étape 10 : Fin du tutoriel ── */
       {
         popover: {
           title: '🎉 Vous êtes prêt !',
@@ -215,82 +194,547 @@
             'Vous connaissez maintenant l\'essentiel d\'AMN Stock. '
             + 'Le bouton <strong>?</strong> en haut à droite vous permet '
             + 'de relancer ce tutoriel à tout moment. Bonne gestion !',
-          side: 'over',
-          align: 'center',
+          side: 'over', align: 'center',
         },
       },
-
-    ]; // fin steps
+    ];
   }
 
-  /* ── Constructeur du driverObj Dashboard ─────────────────────────────── */
   function createDashboardTour() {
-    return driver({
-      /* ── Options globales ── */
-      animate: true,
-      overlayColor: '#000',
-      overlayOpacity: 0.72,
-      smoothScroll: true,
-
-      /* ── Navigation ── */
-      allowKeyboardControl: true,   // flèches clavier
-      allowClose: false,            // clic sur l'overlay → ne ferme pas
-
-      /* ── Progression ── */
-      showProgress: true,
-      progressText: 'Étape {{current}} sur {{total}}',
-
-      /* ── Labels boutons (en français) ── */
-      nextBtnText: 'Suivant →',
-      prevBtnText: '← Précédent',
-      doneBtnText: 'Terminer ✓',
-
-      /* ── Popover global ── */
-      popoverClass: 'amn-tour-popover',
-
-      /* ── Hook global : fermeture du tour ────────────────────────────────
-         Appelé quand l'utilisateur clique "Terminer" ou ferme le tour.
-         Garantit que le modal est bien fermé même si le tour est interrompu
-         avant l'étape 8.                                              ── */
-      onDestroyStarted: (_el, _step, { driver: driverInstance }) => {
-        closeAddModal();
-        /* On laisse driver.js terminer la destruction normalement */
-        driverInstance.destroy();
+    return driver(commonOpts({
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        closeModal('addModal');
+        d.destroy();
       },
-
-      /* ── Hook global : fin effective ── */
-      onDestroyed: () => {
-        localStorage.setItem(STORAGE_KEY, '1');
-      },
-
       steps: buildDashboardSteps(),
-    });
+    }));
   }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * DISCHARGE LIST
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildDischargeListSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-box-arrow-up-right me-1"></i> Gestion des Décharges',
+          description:
+            'Cette page centralise toutes les sorties d\'équipements. '
+            + 'Chaque décharge représente un ensemble de matériel confié à un '
+            + 'technicien pour une mission terrain.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-btn-new-discharge',
+        popover: {
+          title: '<i class="bi bi-plus-circle-fill me-1"></i> Nouvelle décharge',
+          description:
+            'Créez une nouvelle décharge pour enregistrer les équipements '
+            + 'remis à un technicien avant une mission.',
+          side: 'bottom', align: 'end',
+        },
+      },
+      {
+        element: '#tour-discharge-filters',
+        popover: {
+          title: '<i class="bi bi-funnel-fill me-1"></i> Filtres de recherche',
+          description:
+            'Filtrez les décharges par <strong>technicien</strong>, '
+            + '<strong>statut</strong> (En cours / Clôturée) ou '
+            + '<strong>période de date</strong> pour retrouver rapidement une mission.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '#tour-discharge-table',
+        popover: {
+          title: '<i class="bi bi-table me-1"></i> Liste des décharges',
+          description:
+            'Le tableau affiche toutes les décharges avec leur technicien, '
+            + 'destination, date et statut. Cliquez sur '
+            + '<i class="bi bi-eye-fill"></i> pour voir le détail, '
+            + '<i class="bi bi-pencil-fill"></i> pour modifier (si en cours), '
+            + 'ou <i class="bi bi-file-earmark-plus-fill"></i> pour créer un rapport de retour.',
+          side: 'top', align: 'start',
+        },
+      },
+      {
+        popover: {
+          title: '💡 Cycle de vie d\'une décharge',
+          description:
+            '<strong>1.</strong> Créer la décharge → les équipements quittent le stock.<br>'
+            + '<strong>2.</strong> Mission terrain effectuée.<br>'
+            + '<strong>3.</strong> Créer le rapport de retour → le stock est réintégré automatiquement.<br>'
+            + 'La décharge passe alors en statut <strong>Clôturée</strong>.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Prêt à gérer les décharges !',
+          description:
+            'Utilisez le bouton <strong>?</strong> pour relancer ce tutoriel '
+            + 'à tout moment.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createDischargeListTour() {
+    return driver(commonOpts({ steps: buildDischargeListSteps() }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * DISCHARGE CREATE
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildDischargeCreateSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-plus-circle-fill me-1"></i> Créer une décharge',
+          description:
+            'Ce formulaire vous permet d\'enregistrer les équipements remis à un '
+            + 'technicien avant une mission. Vous pouvez le remplir '
+            + '<strong>manuellement</strong> ou par <strong>commande vocale</strong>.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#destination-input',
+        popover: {
+          title: '<i class="bi bi-geo-alt-fill me-1"></i> Destination',
+          description:
+            'Indiquez le lieu ou l\'intitulé de la mission '
+            + '(ex&nbsp;: <em>Site Douala - Maintenance BTS</em>). '
+            + 'Ce champ est obligatoire.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        element: '#items-container',
+        popover: {
+          title: '<i class="bi bi-boxes me-1"></i> Équipements de la décharge',
+          description:
+            'Ajoutez ici chaque équipement avec sa quantité. '
+            + 'Cliquez sur <strong>Ajouter un équipement</strong> pour insérer '
+            + 'une nouvelle ligne. Le stock disponible est vérifié en temps réel.',
+          side: 'top', align: 'start',
+        },
+      },
+      {
+        element: '#tour-btn-voice',
+        popover: {
+          title: '<i class="bi bi-mic-fill me-1"></i> Assistant vocal IA',
+          description:
+            'Cliquez sur <strong>Suivant</strong> pour découvrir l\'assistant vocal '
+            + 'qui vous permet de dicter toute la décharge en une seule commande.',
+          side: 'bottom', align: 'end',
+        },
+        onNextClick: (_el, _step, { driver: d }) => {
+          openModal('voiceModal', () => { d.moveNext(); });
+        },
+      },
+      {
+        element: '#voiceModal',
+        popover: {
+          title: '<i class="bi bi-mic-fill me-1"></i> Interface vocale',
+          description:
+            'Appuyez sur le bouton micro et dictez votre décharge en langage naturel. '
+            + 'Exemple : <em>« Départ pour Yaoundé avec 3 routeurs 4G et 5 câbles RJ45 »</em>. '
+            + 'L\'IA Groq Whisper transcrit et remplit le formulaire automatiquement.',
+          side: 'top', align: 'center',
+        },
+        onDeselected: () => { closeModal('voiceModal'); },
+      },
+      {
+        element: '#submit-btn',
+        popover: {
+          title: '<i class="bi bi-check-circle-fill me-1"></i> Valider la décharge',
+          description:
+            'Une fois tous les équipements saisis, cliquez sur '
+            + '<strong>Enregistrer</strong> pour créer la décharge. '
+            + 'Le stock sera mis à jour immédiatement.',
+          side: 'top', align: 'end',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Décharge prête à créer !',
+          description:
+            'Remplissez le formulaire et validez. Un rapport de retour '
+            + 'devra être créé à la fin de la mission pour réintégrer '
+            + 'les équipements au stock.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createDischargeCreateTour() {
+    return driver(commonOpts({
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        closeModal('voiceModal');
+        d.destroy();
+      },
+      steps: buildDischargeCreateSteps(),
+    }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * DISCHARGE DETAIL
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildDischargeDetailSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-box-arrow-up-right me-1"></i> Détail de la décharge',
+          description:
+            'Cette page affiche toutes les informations d\'une décharge : '
+            + 'technicien assigné, destination, date de départ et liste complète '
+            + 'des équipements emportés.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-discharge-detail-card',
+        popover: {
+          title: '<i class="bi bi-info-circle-fill me-1"></i> Informations de la décharge',
+          description:
+            'Retrouvez ici le technicien responsable, la destination de la mission, '
+            + 'la date de départ et le statut actuel '
+            + '(<strong>En cours</strong> ou <strong>Clôturée</strong>).',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        popover: {
+          title: '<i class="bi bi-boxes me-1"></i> Équipements emportés',
+          description:
+            'Le tableau liste chaque équipement avec sa référence et la quantité '
+            + 'sortie du stock pour cette mission.',
+          side: 'over', align: 'center',
+        },
+      },
+      ...(document.getElementById('tour-btn-create-report') ? [{
+        element: '#tour-btn-create-report',
+        popover: {
+          title: '<i class="bi bi-file-earmark-plus-fill me-1"></i> Rapport de retour',
+          description:
+            'À la fin de la mission, créez un rapport de retour pour indiquer '
+            + 'quels équipements ont été ramenés, leur état (bon état / défectueux) '
+            + 'et les actions réalisées sur le terrain.',
+          side: 'top', align: 'center',
+        },
+      }] : []),
+      {
+        popover: {
+          title: '✅ Vue complète de la décharge',
+          description:
+            'Revenez sur cette page après la mission pour créer le rapport '
+            + 'de retour et clôturer la décharge.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createDischargeDetailTour() {
+    return driver(commonOpts({ steps: buildDischargeDetailSteps() }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * FIELD REPORT LIST
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildFieldReportListSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-file-earmark-text me-1"></i> Rapports de terrain',
+          description:
+            'Cette page recense tous les rapports de retour de mission. '
+            + 'Chaque rapport est lié à une décharge et documente '
+            + 'les actions réalisées ainsi que l\'état des équipements ramenés.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-report-table',
+        popover: {
+          title: '<i class="bi bi-table me-1"></i> Historique des rapports',
+          description:
+            'Le tableau affiche le technicien, la décharge associée, la destination '
+            + 'et la date de retour. Cliquez sur '
+            + '<i class="bi bi-eye-fill"></i> pour consulter le rapport complet.',
+          side: 'top', align: 'start',
+        },
+      },
+      {
+        popover: {
+          title: '<i class="bi bi-arrow-right-circle-fill me-1"></i> Créer un rapport',
+          description:
+            'Les rapports se créent depuis la page de détail d\'une décharge. '
+            + 'Accédez à une décharge <strong>En cours</strong> via le menu '
+            + '<strong>Décharges</strong> pour créer son rapport de retour.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Suivi des missions',
+          description:
+            'Grâce aux rapports, chaque sortie de matériel est documentée '
+            + 'et le stock est automatiquement réintégré après validation.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createFieldReportListTour() {
+    return driver(commonOpts({ steps: buildFieldReportListSteps() }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * FIELD REPORT CREATE
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildFieldReportCreateSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-file-earmark-plus-fill me-1"></i> Rapport de retour',
+          description:
+            'Ce formulaire clôture la mission. Renseignez les actions réalisées '
+            + 'sur le terrain et l\'état des équipements ramenés. '
+            + 'Le stock sera mis à jour automatiquement.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-report-description',
+        popover: {
+          title: '<i class="bi bi-journal-text me-1"></i> Rapport détaillé',
+          description:
+            'Décrivez en détail les travaux effectués, les difficultés rencontrées, '
+            + 'l\'état du site, etc. Ce champ est <strong>obligatoire</strong> '
+            + 'et sera visible par les administrateurs.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      ...(document.getElementById('tour-report-condition') ? [{
+        element: '#tour-report-condition',
+        popover: {
+          title: '<i class="bi bi-arrow-return-left me-1"></i> État des équipements',
+          description:
+            'Pour chaque équipement emporté, indiquez la quantité ramenée et '
+            + 'son état : <strong class="text-success">Bon état</strong> → réintégré au stock, '
+            + '<strong class="text-danger">Défectueux</strong> → comptabilisé séparément.',
+          side: 'bottom', align: 'start',
+        },
+      }] : []),
+      {
+        element: '#submit-btn',
+        popover: {
+          title: '<i class="bi bi-check2-all me-1"></i> Valider et clôturer',
+          description:
+            'Cliquez sur <strong>Valider le rapport & clôturer la mission</strong> '
+            + 'pour enregistrer le rapport. La décharge passera en statut '
+            + '<strong>Clôturée</strong> et le stock sera mis à jour.',
+          side: 'top', align: 'end',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Mission documentée !',
+          description:
+            'Un rapport bien renseigné permet un suivi précis du matériel '
+            + 'et facilite la gestion des stocks à long terme.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createFieldReportCreateTour() {
+    return driver(commonOpts({ steps: buildFieldReportCreateSteps() }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * FIELD REPORT DETAIL
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildFieldReportDetailSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-file-earmark-check-fill me-1"></i> Rapport de mission',
+          description:
+            'Cette page affiche le compte-rendu complet d\'une mission : '
+            + 'informations du technicien, date de retour, rapport écrit '
+            + 'et récapitulatif des équipements ramenés.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-report-detail-card',
+        popover: {
+          title: '<i class="bi bi-info-circle-fill me-1"></i> Informations de mission',
+          description:
+            'Retrouvez ici le technicien, la date de retour, la destination '
+            + 'et le rapport narratif complet de ce qui s\'est passé sur le terrain.',
+          side: 'bottom', align: 'start',
+        },
+      },
+      {
+        popover: {
+          title: '<i class="bi bi-table me-1"></i> Récapitulatif des retours',
+          description:
+            'Le tableau liste chaque équipement avec la quantité ramenée, '
+            + 'son état (bon état / défectueux) et le calcul des unités '
+            + 'consommées ou perdues pendant la mission.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Rapport consulté',
+          description:
+            'Utilisez le bouton <strong>Voir la décharge</strong> pour revenir '
+            + 'à la décharge associée ou <strong>Tous les rapports</strong> '
+            + 'pour consulter l\'historique complet.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createFieldReportDetailTour() {
+    return driver(commonOpts({ steps: buildFieldReportDetailSteps() }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * USER LIST (admin only)
+   * ════════════════════════════════════════════════════════════════════════ */
+  function buildUserListSteps() {
+    return [
+      {
+        popover: {
+          title: '<i class="bi bi-people-fill me-1"></i> Gestion des comptes',
+          description:
+            'Cette section (réservée aux administrateurs) permet de gérer '
+            + 'tous les utilisateurs de l\'application : créer des techniciens, '
+            + 'promouvoir un admin ou désactiver un compte.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        element: '#tour-btn-new-user',
+        popover: {
+          title: '<i class="bi bi-person-plus-fill me-1"></i> Ajouter un utilisateur',
+          description:
+            'Cliquez sur <strong>Suivant</strong> pour voir le formulaire '
+            + 'de création d\'un nouvel utilisateur.',
+          side: 'bottom', align: 'end',
+        },
+        onNextClick: (_el, _step, { driver: d }) => {
+          openModal('userModal', () => { d.moveNext(); });
+        },
+      },
+      {
+        element: '#f_username',
+        popover: {
+          title: '<i class="bi bi-person-fill me-1"></i> Nom d\'utilisateur',
+          description:
+            'Le nom d\'utilisateur est unique et utilisé pour la connexion '
+            + '(ex&nbsp;: <em>jean.dupont</em>). Il ne peut pas être modifié '
+            + 'après création.',
+          side: 'bottom', align: 'start',
+        },
+        onDeselected: () => { closeModal('userModal'); },
+      },
+      {
+        element: '#tour-user-table',
+        popover: {
+          title: '<i class="bi bi-table me-1"></i> Liste des utilisateurs',
+          description:
+            'Le tableau affiche tous les comptes avec leur rôle '
+            + '(<strong>Admin</strong> ou <strong>Technicien</strong>), '
+            + 'leur date d\'inscription et leur dernière connexion. '
+            + 'Utilisez les boutons d\'action pour modifier ou supprimer un compte.',
+          side: 'top', align: 'start',
+        },
+      },
+      {
+        popover: {
+          title: '<i class="bi bi-shield-fill-check me-1"></i> Rôles et permissions',
+          description:
+            '<strong>Technicien</strong> : peut créer des décharges et des rapports de terrain.<br>'
+            + '<strong>Admin</strong> : accès complet — dashboard, inventaire, '
+            + 'gestion des comptes et alertes stock.',
+          side: 'over', align: 'center',
+        },
+      },
+      {
+        popover: {
+          title: '✅ Gestion des comptes maîtrisée !',
+          description:
+            'Créez les comptes de vos techniciens ici. Ils pourront se connecter '
+            + 'immédiatement après création. Le bouton <strong>?</strong> '
+            + 'relance ce tutoriel à tout moment.',
+          side: 'over', align: 'center',
+        },
+      },
+    ];
+  }
+
+  function createUserListTour() {
+    return driver(commonOpts({
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        closeModal('userModal');
+        d.destroy();
+      },
+      steps: buildUserListSteps(),
+    }));
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * ROUTEUR DE PAGES
+   * ════════════════════════════════════════════════════════════════════════ */
+  const PAGE_TOURS = {
+    dashboard:           createDashboardTour,
+    discharge_list:      createDischargeListTour,
+    discharge_create:    createDischargeCreateTour,
+    discharge_detail:    createDischargeDetailTour,
+    field_report_list:   createFieldReportListTour,
+    field_report_create: createFieldReportCreateTour,
+    field_report_detail: createFieldReportDetailTour,
+    user_list:           createUserListTour,
+  };
 
   /* ── API publique : window.startAppTour() ─────────────────────────────── */
   window.startAppTour = function () {
     const page = document.body.dataset.page;
+    const factory = PAGE_TOURS[page];
 
-    if (page === 'dashboard') {
-      /* Réinitialise le flag pour permettre un re-lancement manuel */
+    if (factory) {
       localStorage.removeItem(STORAGE_KEY);
-      createDashboardTour().drive();
+      factory().drive();
       return;
     }
 
-    /* Sur les autres pages : message informatif via toast (si dispo) */
     if (typeof showToast === 'function') {
-      showToast('Le tutoriel est disponible sur le <strong>Dashboard</strong>.', 'info');
+      showToast('Le tutoriel est disponible sur le <strong>Dashboard</strong> et les pages principales.', 'info');
     }
   };
 
-  /* ── Auto-démarrage à la première connexion ───────────────────────────── */
+  /* ── Auto-démarrage à la première visite ─────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {
-    if (localStorage.getItem(STORAGE_KEY)) return;   // déjà vu
-    if (document.body.dataset.page !== 'dashboard') return; // mauvaise page
+    if (localStorage.getItem(STORAGE_KEY)) return;
 
-    /* Délai court pour laisser la page se stabiliser
-       (rendu Bootstrap, notifications, etc.)                           */
+    const page = document.body.dataset.page;
+    /* Auto-start uniquement sur le Dashboard (première connexion) */
+    if (page !== 'dashboard') return;
+
     setTimeout(function () {
       createDashboardTour().drive();
     }, 900);
