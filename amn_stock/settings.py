@@ -59,16 +59,17 @@ WSGI_APPLICATION = 'amn_stock.wsgi.application'
 
 # PostgreSQL via DATABASE_URL (NeonDB pooled — PgBouncer transaction mode)
 # En local sans DATABASE_URL → fallback SQLite pour le dev
-# ⚠️  conn_max_age=0 obligatoire avec le pooler NeonDB (PgBouncer transaction mode)
-#     disable_server_side_cursors=True évite les erreurs avec les named cursors
+# conn_max_age=0 : obligatoire avec PgBouncer transaction mode (NeonDB)
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=0,  # Désactiver les connexions persistantes pour éviter les erreurs SSL du pooler Neon
+        conn_max_age=0,
         conn_health_checks=True,
-        disable_server_side_cursors=True,
     )
 }
+# disable_server_side_cursors : défini manuellement (non supporté par dj-database-url==2.1.0)
+# Évite les erreurs de named cursors avec PgBouncer transaction mode
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
