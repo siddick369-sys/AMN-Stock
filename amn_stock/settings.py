@@ -67,6 +67,15 @@ DATABASES = {
         conn_health_checks=True,
     )
 }
+DATABASES = {
+    'default': dj_database_url.config(
+        # Récupère l'URL depuis les variables d'environnement, sinon utilise sqlite en local
+        default=os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+        conn_max_age=60,         # Évite de fermer/rouvrir la connexion trop souvent
+        conn_health_checks=True, # Vérifie que la connexion est vivante (Anti-Erreur SSL)
+        ssl_require=not DEBUG    # SSL obligatoire en production, facultatif en local
+    )
+}
 # disable_server_side_cursors : défini manuellement (non supporté par dj-database-url==2.1.0)
 # Évite les erreurs de named cursors avec PgBouncer transaction mode
 DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
