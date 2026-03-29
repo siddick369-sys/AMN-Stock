@@ -51,8 +51,12 @@ print('Tâches Celery Beat configurées.')
 "
 
 # ── 5. Vérification finale ────────────────────────────────────────────────────
-echo "==> [5/5] Vérification de la configuration Django..."
-python manage.py check --database default
+# Note : manage.py check --database default est omis volontairement.
+# NeonDB free tier peut se mettre en pause entre les étapes du build,
+# provoquant un timeout. Le succès de migrate (step 3) suffit à valider
+# la connexion à la base de données.
+echo "==> [5/5] Vérification de la configuration Django (sans connexion DB)..."
+python manage.py check
 
 echo ""
 echo "======================================================"
