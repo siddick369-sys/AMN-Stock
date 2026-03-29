@@ -59,19 +59,26 @@ WSGI_APPLICATION = 'amn_stock.wsgi.application'
 
 # PostgreSQL via DATABASE_URL (NeonDB pooled — PgBouncer transaction mode)
 # En local sans DATABASE_URL → fallback SQLite pour le dev
-# conn_max_age=0 : obligatoire avec PgBouncer transaction mode (NeonDB)
+# ⚠️  ssl_require ne doit PAS être utilisé ici : il injecte sslmode dans
+#     OPTIONS pour TOUS les backends, y compris SQLite → TypeError au build.
+#     Le ?sslmode=require est déjà inclus dans l'URL NeonDB et parsé par
+#     dj_database_url → OPTIONS: {'sslmode': 'require'} côté PostgreSQL seulement.
+_DATABASE_URL = os.environ.get('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+_IS_POSTGRES = _DATABASE_URL.startswith(('postgres://', 'postgresql://'))
 
 DATABASES = {
     'default': dj_database_url.config(
-        # Récupère l'URL depuis les variables d'environnement, sinon utilise sqlite en local
-        default=os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=60,         # Évite de fermer/rouvrir la connexion trop souvent
-        conn_health_checks=True, # Vérifie que la connexion est vivante (Anti-Erreur SSL)
-        ssl_require=not DEBUG    # SSL obligatoire en production, facultatif en local
+        default=_DATABASE_URL,
+        conn_max_age=0,          # 0 obligatoire avec PgBouncer transaction mode (NeonDB)
+        conn_health_checks=True,
     )
 }
-# disable_server_side_cursors : défini manuellement (non supporté par dj-database-url==2.1.0)
-# Évite les erreurs de named cursors avec PgBouncer transaction mode
+
+# DISABLE_SERVER_SIDE_CURSORS uniquement pour PostgreSQL :
+# PgBouncer transaction mode ne supporte pas les named cursors (Paginator, iterator()).
+# Ne pas appliquer à SQLite (clé ignorée mais propre de ne pas polluer la config).
+if _IS_POSTGRES:
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
