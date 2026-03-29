@@ -102,6 +102,11 @@ ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@amn.africa').split(',')
 
 # Celery configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+# Configuration SSL pour Upstash (rediss://)
+CELERY_BROKER_USE_SSL = {
+    'ssl_cert_reqs': None  # Désactive la vérification du certificat pour Upstash mode bridge
+} if CELERY_BROKER_URL.startswith('rediss://') else None
+
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_ACCEPT_CONTENT = ['json']
@@ -117,6 +122,9 @@ CACHES = {
         "LOCATION": CELERY_BROKER_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "ssl_cert_reqs": None
+            } if CELERY_BROKER_URL.startswith('rediss://') else {}
         }
     }
 }
