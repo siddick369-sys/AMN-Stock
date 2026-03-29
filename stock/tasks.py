@@ -9,7 +9,7 @@ Chaque événement critique déclenche :
 -------------------
   • check_low_stock               — planifié toutes les 30 min (Celery Beat)
   • notify_low_stock_realtime     — appelé à chaud quand une sortie fait tomber un item en stock faible
-  • whatsapp_discharge_created    — décharge créée par un technicien
+  • whatsapp_discharge_created    — décharge créée par un field engineer
   • whatsapp_field_report_created — rapport de terrain soumis / mission clôturée
   • send_hub_alert                — alerte manuelle Hub (équipements défectueux)
   • ai_generate_summary           — génère un rapport IA via Groq et stocke en cache
@@ -176,7 +176,7 @@ def whatsapp_discharge_created(self, discharge_id):
         logger.error("whatsapp_discharge_created : décharge introuvable (id=%s)", discharge_id)
         return
 
-    technicien = discharge.user.get_full_name() or discharge.user.username
+    field_engineer = discharge.user.get_full_name() or discharge.user.username
     date_str   = discharge.date.strftime('%d/%m/%Y à %H:%M')
 
     # Résumé des équipements
@@ -187,7 +187,7 @@ def whatsapp_discharge_created(self, discharge_id):
 
     wa_msg = (
         f"{_header('📦', 'Nouvelle Décharge Effectuée')}\n\n"
-        f"👤 Technicien  : *{technicien}*\n"
+        f"👤 Field Engineer : *{field_engineer}*\n"
         f"🗓️  Date départ : {date_str}\n"
         f"📍 Mission     : _{discharge.destination}_\n"
         f"🔢 Décharge N° : *#{discharge.pk}*\n\n"
@@ -228,7 +228,7 @@ def whatsapp_field_report_created(self, report_id):
         return
 
     discharge  = report.discharge
-    technicien = discharge.user.get_full_name() or discharge.user.username
+    field_engineer = discharge.user.get_full_name() or discharge.user.username
     date_str   = report.date.strftime('%d/%m/%Y à %H:%M')
 
     good_lines      = []
@@ -254,7 +254,7 @@ def whatsapp_field_report_created(self, report_id):
 
     wa_msg = (
         f"{_header('📝', 'Rapport de Terrain Soumis')}\n\n"
-        f"👤 Technicien : *{technicien}*\n"
+        f"👤 Field Engineer : *{field_engineer}*\n"
         f"📍 Mission    : _{discharge.destination}_\n"
         f"📅 Retour     : {date_str}\n"
         f"🔢 Rapport N° : *#{report.pk}* (Décharge #{discharge.pk})\n\n"
@@ -321,7 +321,7 @@ def send_hub_alert(self, equipment_ids, user_id):
         )
         wa_msg = (
             f"{_header('🔧', 'Alerte Hub — Équipements Défectueux')}\n\n"
-            f"👤 Signalé par : *{admin_name}*\n"
+            f"👤 Regional Manager : *{admin_name}*\n"
             f"📅 Date        : {_now_str()}\n\n"
             f"*Équipements concernés :*\n{wa_lines}\n\n"
             f"📬 Un email récapitulatif a également été envoyé au Hub.\n"

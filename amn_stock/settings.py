@@ -62,7 +62,7 @@ WSGI_APPLICATION = 'amn_stock.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
+        conn_max_age=0,  # Désactiver les connexions persistantes pour éviter les erreurs SSL du pooler Neon
         conn_health_checks=True,
     )
 }

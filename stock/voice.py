@@ -92,7 +92,7 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
 
     # Prompt de contexte pour améliorer la précision sur le vocabulaire AMN
     context_prompt = (
-        "Transcription d'un technicien de télécommunications AMN (Africa Mobile Networks) "
+        "Transcription d'un field engineer de télécommunications AMN (Africa Mobile Networks) "
         "dictant une demande de décharge d'équipements. Vocabulaire probable : "
         "routeur, câble fibre, antenne, BTS, onduleur, switch, batterie, "
         "modem, GPS, talkies-walkie, mission, site, installation, déploiement."
@@ -118,7 +118,7 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _SYSTEM_NLU = """Tu es l'assistant logistique vocal d'Africa Mobile Networks (AMN).
-Tu analyses la transcription d'un technicien qui dicte oralement une demande de sortie
+Tu analyses la transcription d'un field engineer qui dicte oralement une demande de sortie
 d'équipements (décharge). Tu dois en extraire les informations structurées suivantes :
   1. La destination / description de la mission
   2. La liste des équipements avec les quantités
@@ -175,7 +175,7 @@ def extract_discharge_intent(
     user_prompt = f"""Liste des équipements disponibles en stock :
 {equip_json}
 
-Transcription du technicien :
+Transcription du field engineer :
 "{transcription}"
 
 Retourne UNIQUEMENT ce JSON (sans markdown, sans texte hors JSON) :
@@ -188,7 +188,7 @@ Retourne UNIQUEMENT ce JSON (sans markdown, sans texte hors JSON) :
       "reference": "<référence>",
       "quantity": <entier>,
       "confidence": "high|medium|low",
-      "original_mention": "<mot exact utilisé par le technicien>"
+      "original_mention": "<mot exact utilisé par le field engineer>"
     }}
   ],
   "unmatched": ["<termes mentionnés mais non trouvés dans la liste>"],

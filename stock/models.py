@@ -35,7 +35,7 @@ class Discharge(models.Model):
         ('open', 'En cours'),
         ('closed', 'Clôturée'),
     ]
-    user = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Technicien")
+    user = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Field Engineer")
     date = models.DateTimeField(default=timezone.now, verbose_name="Date de départ")
     destination = models.CharField(max_length=300, verbose_name="Destination / Mission")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='open', verbose_name="Statut")

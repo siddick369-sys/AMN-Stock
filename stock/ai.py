@@ -278,7 +278,7 @@ Rupture totale :
 Rédige un rapport structuré avec les sections suivantes :
 1. Résumé Exécutif (3-5 phrases clés)
 2. État de l'Inventaire (analyse détaillée du stock, points critiques)
-3. Analyse des Décharges et Missions (patterns, techniciens actifs, destinations)
+3. Analyse des Décharges et Missions (patterns, Field Engineers actifs, destinations)
 4. Équipements Défectueux et Retours (analyse qualité)
 5. Points de Vigilance (alertes, risques immédiats)
 6. Conclusion
@@ -325,7 +325,7 @@ et propose des recommandations d'optimisation concrètes.
 Fournis exactement 10 à 15 recommandations réparties sur 4 catégories :
 
 **A. Gestion des Stocks Critiques** (équipements faibles/rupture)
-**B. Optimisation des Flux de Décharges** (processus, traçabilité, délais)
+**B. Optimisation des Flux de Décharges** (processus, traçabilité, délais, Field Engineers)
 **C. Réduction des Défauts et Pertes** (qualité, maintenance, retours)
 **D. Améliorations Systémiques** (processus, formation, indicateurs)
 
