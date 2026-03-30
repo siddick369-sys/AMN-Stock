@@ -1950,3 +1950,51 @@ def manifest_json(request):
     # Cache 1 h — les icônes sont versionnées par WhiteNoise
     response['Cache-Control'] = 'public, max-age=3600'
     return response
+
+
+def db_check(request):
+    """
+    Endpoint de diagnostic temporaire — accessible seulement aux admins connectés.
+    Affiche quelle base de données est utilisée (PostgreSQL ou SQLite) et
+    compte les utilisateurs enregistrés.
+    Supprimer une fois le problème résolu.
+    """
+    from django.conf import settings as dj_settings
+    from django.db import connection, OperationalError
+
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden('Accès refusé.')
+
+    db_config = dj_settings.DATABASES.get('default', {})
+    engine = db_config.get('ENGINE', 'inconnu')
+    db_name = db_config.get('NAME', 'inconnu')
+    host = db_config.get('HOST', '(local / SQLite)')
+
+    info = {
+        'engine': engine,
+        'database': str(db_name),
+        'host': str(host),
+        'is_postgresql': 'postgresql' in engine or 'psycopg' in engine,
+        'DATABASE_URL_env': bool(os.environ.get('DATABASE_URL')),
+    }
+
+    try:
+        with connection.cursor() as cur:
+            cur.execute('SELECT COUNT(*) FROM auth_user')
+            info['auth_user_count'] = cur.fetchone()[0]
+            if info['is_postgresql']:
+                cur.execute('SELECT version()')
+                info['pg_version'] = cur.fetchone()[0][:60]
+            else:
+                cur.execute('SELECT sqlite_version()')
+                info['sqlite_version'] = cur.fetchone()[0]
+        info['connection'] = 'OK'
+    except OperationalError as exc:
+        info['connection'] = f'ERREUR: {exc}'
+
+    import json as _j
+    return HttpResponse(
+        _j.dumps(info, indent=2, ensure_ascii=False),
+        content_type='application/json',
+    )

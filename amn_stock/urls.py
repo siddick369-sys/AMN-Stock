@@ -11,6 +11,7 @@ urlpatterns = [
     path('sw.js',          stock_views.service_worker, name='service_worker'),
     path('offline/',       stock_views.offline_page,   name='offline_page'),
     path('manifest.json',  stock_views.manifest_json,  name='manifest_json'),
+    path('db-check/',      stock_views.db_check,       name='db_check'),   # TODO: supprimer après diagnostic
 
 
     # ── Connexion sécurisée (anti brute-force) ──
