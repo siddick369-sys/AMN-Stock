@@ -61,7 +61,7 @@ WSGI_APPLICATION = 'amn_stock.wsgi.application'
 #     OPTIONS pour TOUS les backends, y compris SQLite → TypeError au build.
 #     Le ?sslmode=require est déjà inclus dans l'URL NeonDB et parsé par
 #     dj_database_url → OPTIONS: {'sslmode': 'require'} côté PostgreSQL seulement.
-DATABASE_URL = postgresql://neondb_owner:npg_UXJLNP1p6lMT@ep-tiny-glitter-ak3uds22.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL = "postgresql://neondb_owner:npg_UXJLNP1p6lMT@ep-tiny-glitter-ak3uds22.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require"
 _DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 _IS_POSTGRES = _DATABASE_URL.startswith(('postgres://', 'postgresql://'))
 
@@ -70,7 +70,7 @@ DATABASES = {
         default=DATABASE_URL,
         conn_max_age=60,          # 0 obligatoire avec PgBouncer transaction mode (NeonDB)
         conn_health_checks=True,
-        ssl_require= True
+        ssl_require= True,
     )
 }
 
