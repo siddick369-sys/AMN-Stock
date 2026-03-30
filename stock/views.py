@@ -1885,3 +1885,68 @@ def offline_page(request):
     """Page de fallback affichée par le Service Worker quand l'utilisateur
     est hors-ligne et que la page n'est pas en cache."""
     return render(request, 'offline.html')
+
+
+def manifest_json(request):
+    """
+    Sert le Web App Manifest avec des URLs d'icônes correctes (hashées par
+    WhiteNoise CompressedManifestStaticFilesStorage en production).
+    Content-Type: application/manifest+json requis pour que Chrome détecte
+    le manifeste et active le bouton d'installation PWA.
+    """
+    import json as _json
+    from django.contrib.staticfiles.storage import staticfiles_storage
+
+    def icon_url(path):
+        try:
+            return request.build_absolute_uri(staticfiles_storage.url(path))
+        except Exception:
+            return request.build_absolute_uri('/static/' + path)
+
+    manifest = {
+        "name": "AMN Stock — Africa Mobile Networks",
+        "short_name": "AMN Stock",
+        "description": "Système de gestion de stock pour Africa Mobile Networks",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait-primary",
+        "theme_color": "#0d47a1",
+        "background_color": "#0d47a1",
+        "lang": "fr",
+        "categories": ["business", "productivity"],
+        "icons": [
+            {"src": icon_url("icons/favicon-16.png"),  "sizes": "16x16",  "type": "image/png"},
+            {"src": icon_url("icons/favicon-32.png"),  "sizes": "32x32",  "type": "image/png"},
+            {"src": icon_url("icons/apple-touch-icon.png"), "sizes": "180x180", "type": "image/png"},
+            {"src": icon_url("icons/icon-192.png"),    "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": icon_url("icons/icon-192.png"),    "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": icon_url("icons/icon-512.png"),    "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": icon_url("icons/icon-512.png"),    "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+        "screenshots": [],
+        "shortcuts": [
+            {
+                "name": "Nouvelle décharge",
+                "short_name": "Décharge",
+                "description": "Créer une nouvelle décharge",
+                "url": "/discharges/create/",
+                "icons": [{"src": icon_url("icons/icon-192.png"), "sizes": "192x192"}],
+            },
+            {
+                "name": "Tableau de bord",
+                "short_name": "Dashboard",
+                "description": "Voir le tableau de bord",
+                "url": "/",
+                "icons": [{"src": icon_url("icons/icon-192.png"), "sizes": "192x192"}],
+            },
+        ],
+    }
+
+    response = HttpResponse(
+        _json.dumps(manifest, ensure_ascii=False),
+        content_type='application/manifest+json; charset=utf-8',
+    )
+    # Cache 1 h — les icônes sont versionnées par WhiteNoise
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response

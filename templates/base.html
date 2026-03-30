@@ -138,8 +138,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 
   <!-- ══════ PWA ══════ -->
-  <!-- Web App Manifest (installabilité Android/Chrome) -->
-  <link rel="manifest" href="{% static 'manifest.json' %}">
+  <!-- Web App Manifest servi par Django avec URLs d'icônes correctes (hachées WhiteNoise) -->
+  <link rel="manifest" href="/manifest.json">
   <!-- Couleur de thème — barre navigateur sur Android -->
   <meta name="theme-color" content="#0d47a1">
   <!-- iOS : icône écran d'accueil + comportement standalone -->
@@ -384,9 +384,146 @@ setInterval(pollNotifications, 60000); // poll every 60s
 
 {% block extra_js %}{% endblock %}
 
+<!-- ══════ PWA INSTALL PROMPT ══════ -->
+<script>
+(function () {
+  'use strict';
+
+  var _deferredPrompt = null;
+  var _modalShown = false;
+  var STORAGE_KEY = 'pwa_install_dismissed';
+
+  // Capture l'événement beforeinstallprompt avant qu'il ne soit perdu
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    _deferredPrompt = e;
+
+    // Ne pas redemander si l'utilisateur a déjà refusé récemment (7 jours)
+    var dismissed = localStorage.getItem(STORAGE_KEY);
+    if (dismissed) {
+      var daysSince = (Date.now() - parseInt(dismissed, 10)) / 86400000;
+      if (daysSince < 7) return;
+    }
+
+    // Afficher le modal après 3 secondes (laisse la page se charger)
+    if (!_modalShown) {
+      setTimeout(function () {
+        _modalShown = true;
+        var modalEl = document.getElementById('pwaInstallModal');
+        if (modalEl && typeof bootstrap !== 'undefined') {
+          new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false }).show();
+        }
+      }, 3000);
+    }
+  });
+
+  // Bouton "Installer maintenant"
+  document.addEventListener('DOMContentLoaded', function () {
+    var installBtn = document.getElementById('pwaInstallBtn');
+    if (installBtn) {
+      installBtn.addEventListener('click', function () {
+        var modalEl = document.getElementById('pwaInstallModal');
+        var bsModal = bootstrap.Modal.getInstance(modalEl);
+        if (bsModal) bsModal.hide();
+
+        if (_deferredPrompt) {
+          _deferredPrompt.prompt();
+          _deferredPrompt.userChoice.then(function (choice) {
+            if (choice.outcome === 'accepted') {
+              localStorage.removeItem(STORAGE_KEY);
+            }
+            _deferredPrompt = null;
+          });
+        }
+      });
+    }
+
+    // Bouton "Plus tard" — mémorise le refus
+    var dismissBtn = document.getElementById('pwaInstallDismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function () {
+        localStorage.setItem(STORAGE_KEY, Date.now().toString());
+      });
+    }
+  });
+
+  // Masque le bouton install si l'app est déjà installée
+  window.addEventListener('appinstalled', function () {
+    _deferredPrompt = null;
+    var modalEl = document.getElementById('pwaInstallModal');
+    var bsModal = bootstrap.Modal.getInstance(modalEl);
+    if (bsModal) bsModal.hide();
+    if (typeof showToast === 'function') {
+      showToast('AMN Stock installé avec succès !', 'success');
+    }
+  });
+})();
+</script>
+
 <!-- ══════ Driver.js iife + tutoriel AMN ══════ -->
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 <script src="{% static 'js/tour.js' %}"></script>
+
+<!-- ══════ PWA INSTALL MODAL ══════ -->
+<div class="modal fade" id="pwaInstallModal" tabindex="-1" aria-labelledby="pwaInstallModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:20px;overflow:hidden;">
+      <!-- Gradient header -->
+      <div style="background:linear-gradient(135deg,#0d47a1 0%,#1565c0 60%,#e65100 100%);padding:2rem;text-align:center;">
+        <svg viewBox="0 0 100 100" width="72" class="mb-3" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,.3));">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="white" stroke-width="2" opacity="0.3"/>
+          <path d="M20 50 Q 50 10 80 50 T 20 50" fill="none" stroke="#e65100" stroke-width="3"/>
+          <circle cx="50" cy="50" r="15" fill="white"/>
+          <text x="50" y="55" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#0d47a1">AMN</text>
+          <rect x="70" y="40" width="4" height="10" fill="white" opacity="0.8"/>
+          <rect x="76" y="30" width="4" height="20" fill="white" opacity="0.8"/>
+          <rect x="82" y="20" width="4" height="30" fill="white" opacity="0.8"/>
+        </svg>
+        <h5 class="text-white fw-bold mb-1" id="pwaInstallModalLabel">Installer AMN Stock</h5>
+        <p class="text-white-50 small mb-0">Africa Mobile Networks</p>
+      </div>
+      <div class="modal-body px-4 pt-4 pb-2">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div style="width:40px;height:40px;background:#e3f2fd;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-lightning-charge-fill text-primary fs-5"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">Accès instantané</div>
+            <div class="text-muted small">Lancez l'application depuis votre écran d'accueil, sans passer par le navigateur.</div>
+          </div>
+        </div>
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div style="width:40px;height:40px;background:#fff3e0;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-wifi-off text-warning fs-5"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">Fonctionne hors-ligne</div>
+            <div class="text-muted small">Consultez vos données même sans connexion Internet.</div>
+          </div>
+        </div>
+        <div class="d-flex align-items-start gap-3 mb-4">
+          <div style="width:40px;height:40px;background:#e8f5e9;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-bell-fill text-success fs-5"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">Expérience native</div>
+            <div class="text-muted small">Interface plein écran, sans barre d'adresse.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4 gap-2 flex-column flex-sm-row">
+        <button type="button" class="btn btn-primary fw-semibold flex-fill" id="pwaInstallBtn"
+                style="border-radius:12px;padding:.75rem;">
+          <i class="bi bi-download me-2"></i>Installer maintenant
+        </button>
+        <button type="button" class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal"
+                style="border-radius:12px;padding:.75rem;" id="pwaInstallDismiss">
+          Plus tard
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ══════ SERVICE WORKER REGISTRATION ══════ -->
 <script>

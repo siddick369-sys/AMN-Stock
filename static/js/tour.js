@@ -243,7 +243,6 @@
       onDestroyStarted: (_el, _step, { driver: d }) => {
         console.log("[AMN Tour] Destruction Dashboard...");
         closeModal('addModal');
-        // On ne force plus d.destroy() pour laisser le cycle naturel s'il y est déjà.
       },
       steps: buildDashboardSteps(),
     }));

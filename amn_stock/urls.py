@@ -7,9 +7,10 @@ from stock.cron_worker import TaskTriggerView
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # ── PWA — Service Worker (scope racine obligatoire) + page offline ──
-    path('sw.js',    stock_views.service_worker, name='service_worker'),
-    path('offline/', stock_views.offline_page,   name='offline_page'),
+    # ── PWA — Service Worker (scope racine obligatoire) + page offline + manifest ──
+    path('sw.js',          stock_views.service_worker, name='service_worker'),
+    path('offline/',       stock_views.offline_page,   name='offline_page'),
+    path('manifest.json',  stock_views.manifest_json,  name='manifest_json'),
 
 
     # ── Connexion sécurisée (anti brute-force) ──
