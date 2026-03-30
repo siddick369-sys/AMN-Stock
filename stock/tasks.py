@@ -1,13 +1,13 @@
 """
-Tâches Celery — AMN Stock
-==========================
+Async Tasks — AMN Stock (Threaded)
+==================================
 Chaque événement critique déclenche :
   1. Un email (existant)
   2. Un message WhatsApp via Green API (nouveau)
 
 Événements couverts
 -------------------
-  • check_low_stock               — planifié toutes les 30 min (Celery Beat)
+  • check_low_stock               — déclenché par TaskTriggerView (cron-job.org)
   • notify_low_stock_realtime     — appelé à chaud quand une sortie fait tomber un item en stock faible
   • whatsapp_discharge_created    — décharge créée par un field engineer
   • whatsapp_field_report_created — rapport de terrain soumis / mission clôturée
@@ -17,12 +17,11 @@ Chaque événement critique déclenche :
 """
 
 import logging
-
-from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.utils import timezone
+from django.template.loader import render_to_string
 
 from .whatsapp import send_whatsapp
 
@@ -42,16 +41,13 @@ def _header(icon: str, title: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 1. ALERTE STOCK FAIBLE — PLANIFIÉE (toutes les 30 min)
+# 1. ALERTE STOCK FAIBLE — PLANIFIÉE (via cron-job.org)
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.check_low_stock')
-def check_low_stock(self):
+def check_low_stock():
     """
-    Celery Beat — s'exécute toutes les 30 minutes.
-    Si des équipements sont en stock critique (≤ seuil), envoie :
-      - email aux admins
-      - message WhatsApp au numéro de supervision
+    Déclenché périodiquement via le webhook cron_worker.
+    Si des équipements sont en stock critique (≤ seuil), envoie email et WhatsApp.
     """
     from stock.models import Equipment
 
@@ -92,7 +88,6 @@ def check_low_stock(self):
             logger.info("check_low_stock : email envoyé → %s", admin_emails)
         except Exception as exc:
             logger.error("check_low_stock : échec email : %s", exc)
-            raise self.retry(exc=exc, countdown=60, max_retries=3)
 
     # ── WhatsApp ───────────────────────────────────────────────────────
     lines = "\n".join(
@@ -112,14 +107,12 @@ def check_low_stock(self):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 2. NOTIFICATION STOCK FAIBLE EN TEMPS RÉEL (déclenchée à la volée)
+# 2. NOTIFICATION STOCK FAIBLE EN TEMPS RÉEL
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(name='stock.tasks.notify_low_stock_realtime')
 def notify_low_stock_realtime(equipment_id):
     """
-    Appelée immédiatement après chaque sortie qui fait tomber un item
-    sous le seuil. Met à jour le cache frontend ET envoie un WhatsApp.
+    Appelée après chaque sortie faisant tomber un item sous le seuil.
     """
     from stock.models import Equipment
     from django.core.cache import cache
@@ -159,14 +152,12 @@ def notify_low_stock_realtime(equipment_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 3. DÉCHARGE CRÉÉE — notification au responsable
+# 3. DÉCHARGE CRÉÉE
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.whatsapp_discharge_created')
-def whatsapp_discharge_created(self, discharge_id):
+def whatsapp_discharge_created(discharge_id):
     """
-    Déclenché juste après la création d'une décharge validée.
-    Envoie un résumé WhatsApp : qui, où, quoi, combien.
+    Envoie un résumé WhatsApp après création d'une décharge.
     """
     from stock.models import Discharge
 
@@ -179,7 +170,6 @@ def whatsapp_discharge_created(self, discharge_id):
     field_engineer = discharge.user.get_full_name() or discharge.user.username
     date_str   = discharge.date.strftime('%d/%m/%Y à %H:%M')
 
-    # Résumé des équipements
     item_lines = "\n".join(
         f"  • *{item.equipment.name}* ({item.equipment.reference}) × {item.quantity}"
         for item in discharge.items.all()
@@ -198,21 +188,18 @@ def whatsapp_discharge_created(self, discharge_id):
 
     ok = send_whatsapp(wa_msg)
     if not ok:
-        raise self.retry(countdown=30, max_retries=3)
+        logger.warning("whatsapp_discharge_created : échec envoi WA pour décharge #%s", discharge_id)
 
     logger.info("whatsapp_discharge_created : WA envoyé pour décharge #%s", discharge_id)
-    return f"WA décharge #{discharge_id} envoyé."
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 4. RAPPORT DE TERRAIN SOUMIS — clôture de mission
+# 4. RAPPORT DE TERRAIN SOUMIS
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.whatsapp_field_report_created')
-def whatsapp_field_report_created(self, report_id):
+def whatsapp_field_report_created(report_id):
     """
-    Déclenché à la création d'un rapport de terrain.
-    Envoie un résumé des retours (bons / défectueux).
+    Envoie un résumé WhatsApp après soumission d'un rapport de terrain.
     """
     from stock.models import FieldReport
 
@@ -266,22 +253,16 @@ def whatsapp_field_report_created(self, report_id):
 
     ok = send_whatsapp(wa_msg)
     if not ok:
-        raise self.retry(countdown=30, max_retries=3)
+        logger.warning("whatsapp_field_report_created : échec envoi WA pour rapport #%s", report_id)
 
     logger.info("whatsapp_field_report_created : WA envoyé pour rapport #%s", report_id)
-    return f"WA rapport #{report_id} envoyé."
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 5. ALERTE HUB — équipements défectueux signalés par l'admin
+# 5. ALERTE HUB — équipements défectueux
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.send_hub_alert')
-def send_hub_alert(self, equipment_ids, user_id):
-    """
-    Envoi d'un email ET d'un WhatsApp au Hub signalant des équipements
-    défectueux sélectionnés manuellement par l'administrateur.
-    """
+def send_hub_alert(equipment_ids, user_id):
     from stock.models import Equipment
 
     try:
@@ -307,9 +288,11 @@ def send_hub_alert(self, equipment_ids, user_id):
             f"Veuillez prendre les dispositions nécessaires.\n\n"
             f"— Système AMN Stock\n{_now_str()}"
         )
-        hub_email = getattr(settings, 'ADMIN_EMAIL', 'hub@amn.africa')
+        hub_email = getattr(settings, 'ADMIN_EMAIL', ['hub@amn.africa'])
+        if isinstance(hub_email, str): hub_email = [hub_email]
+        
         try:
-            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [hub_email], fail_silently=False)
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, hub_email, fail_silently=False)
         except Exception as exc:
             logger.error("send_hub_alert : échec email : %s", exc)
 
@@ -329,200 +312,90 @@ def send_hub_alert(self, equipment_ids, user_id):
         )
         ok = send_whatsapp(wa_msg)
         if not ok:
-            raise self.retry(countdown=30, max_retries=3)
+            logger.warning("send_hub_alert : échec envoi WA Hub")
 
         logger.info("send_hub_alert : alerte envoyée pour %d équipement(s).", equipments.count())
-        return f"Alerte Hub envoyée pour {equipments.count()} équipement(s)."
-
     except User.DoesNotExist:
         logger.error("send_hub_alert : utilisateur introuvable (id=%s)", user_id)
-        return "Utilisateur introuvable."
     except Exception as exc:
         logger.error("send_hub_alert : erreur inattendue : %s", exc)
-        raise self.retry(exc=exc, countdown=30, max_retries=3)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 6. RAPPORT IA — résumé détaillé via Groq
+# 6. RAPPORT IA
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.ai_generate_summary')
-def ai_generate_summary(self, cache_key: str, days: int = 30):
-    """
-    Collecte toutes les données stock/décharges/rapports sur <days> jours,
-    appelle Groq pour générer un rapport Markdown, et stocke le résultat
-    dans le cache Django sous la clé <cache_key>.
-
-    Structure du cache :
-      {
-        "status":  "ready" | "error",
-        "content": "<markdown>",
-        "error":   "<message d'erreur si status==error>",
-        "generated_at": "<datetime str>"
-      }
-    """
+def ai_generate_summary(cache_key: str, days: int = 30):
     from django.core.cache import cache
     from .ai import build_stock_context, generate_summary
 
     try:
-        logger.info("ai_generate_summary : collecte des données (jours=%d)…", days)
+        logger.info("ai_generate_summary : collecte des données…")
         ctx = build_stock_context(days=days)
-
-        logger.info("ai_generate_summary : appel Groq…")
         markdown = generate_summary(ctx)
-
         result = {
             "status": "ready",
             "content": markdown,
             "generated_at": ctx["generated_at"],
-            "period_days": days,
-            "stats": {
-                "total_equipment": ctx["total_equipment_types"],
-                "total_units": ctx["total_units_in_stock"],
-                "total_defective": ctx["total_defective"],
-                "low_stock_count": ctx["low_stock_count"],
-                "total_discharges": ctx["total_discharges"],
-                "total_reports": ctx["total_reports"],
-            },
+            "stats": ctx.get("stats", {})
         }
-        cache.set(cache_key, result, timeout=7200)   # 2h
-        logger.info("ai_generate_summary : rapport stocké sous '%s'.", cache_key)
-        return "OK"
-
+        cache.set(cache_key, result, timeout=7200)
+        logger.info("ai_generate_summary : rapport prêt.")
     except Exception as exc:
         logger.error("ai_generate_summary : erreur : %s", exc)
         cache.set(cache_key, {"status": "error", "error": str(exc)}, timeout=600)
-        raise self.retry(exc=exc, countdown=60, max_retries=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 7. SUGGESTIONS IA — recommandations d'optimisation via Groq
+# 7. SUGGESTIONS IA
 # ═══════════════════════════════════════════════════════════════════════
 
-@shared_task(bind=True, name='stock.tasks.ai_generate_suggestions')
-def ai_generate_suggestions(self, cache_key: str, days: int = 30):
-    """
-    Collecte toutes les données et appelle Groq pour générer des
-    recommandations d'optimisation priorisées. Stocke en cache.
-    """
+def ai_generate_suggestions(cache_key: str, days: int = 30):
     from django.core.cache import cache
     from .ai import build_stock_context, generate_suggestions
 
     try:
         logger.info("ai_generate_suggestions : collecte des données…")
         ctx = build_stock_context(days=days)
-
-        logger.info("ai_generate_suggestions : appel Groq…")
         markdown = generate_suggestions(ctx)
-
         result = {
             "status": "ready",
             "content": markdown,
             "generated_at": ctx["generated_at"],
         }
         cache.set(cache_key, result, timeout=7200)
-        logger.info("ai_generate_suggestions : suggestions stockées sous '%s'.", cache_key)
-        return "OK"
-
     except Exception as exc:
         logger.error("ai_generate_suggestions : erreur : %s", exc)
         cache.set(cache_key, {"status": "error", "error": str(exc)}, timeout=600)
-        raise self.retry(exc=exc, countdown=60, max_retries=2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VÉRIFICATION EMAIL — CODE OTP
+# VÉRIFICATION EMAIL / OTP
 # ─────────────────────────────────────────────────────────────────────────────
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_verification_email(self, user_id: int, code: str):
-    """
-    Envoie l'email de vérification du compte (code OTP 6 chiffres).
-    Retries automatiques : 3 × 60 secondes en cas d'échec SMTP.
-    """
+def send_verification_email(user_id: int, code: str):
     try:
-        from django.core.mail import EmailMultiAlternatives
-        from django.template.loader import render_to_string
-
         user = User.objects.get(pk=user_id)
-
         subject = "[AMN Stock] Vérification de votre compte"
-        text_body = (
-            f"Bonjour {user.get_full_name() or user.username},\n\n"
-            f"Votre code de vérification AMN Stock est :\n\n"
-            f"    {code}\n\n"
-            f"Ce code est valable 10 minutes.\n\n"
-            f"Si vous n'avez pas créé de compte, ignorez cet email.\n\n"
-            f"— Africa Mobile Networks"
-        )
-        html_body = render_to_string('emails/verification.html', {
-            'user': user,
-            'code': code,
-        })
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
+        text_body = f"Code OTP : {code}"
+        html_body = render_to_string('emails/verification.html', {'user': user, 'code': code})
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [user.email])
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
-        logger.info("send_verification_email : code envoyé à %s (user=%d)", user.email, user_id)
-
-    except User.DoesNotExist:
-        logger.error("send_verification_email : user_id=%d introuvable", user_id)
+        logger.info("send_verification_email envoyé à %s", user.email)
     except Exception as exc:
-        logger.error("send_verification_email : échec SMTP pour user_id=%d : %s", user_id, exc)
-        raise self.retry(exc=exc)
+        logger.error("send_verification_email échec : %s", exc)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RÉINITIALISATION MOT DE PASSE — CODE OTP
-# ─────────────────────────────────────────────────────────────────────────────
-
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_password_reset_email(self, user_id: int, code: str):
-    """
-    Envoie le code OTP de réinitialisation de mot de passe.
-    Retries automatiques : 3 × 60 secondes en cas d'échec SMTP.
-    """
+def send_password_reset_email(user_id: int, code: str):
     try:
-        from django.core.mail import EmailMultiAlternatives
-        from django.template.loader import render_to_string
-
         user = User.objects.get(pk=user_id)
-
         subject = "[AMN Stock] Réinitialisation de votre mot de passe"
-        text_body = (
-            f"Bonjour {user.get_full_name() or user.username},\n\n"
-            f"Votre code de réinitialisation AMN Stock est :\n\n"
-            f"    {code}\n\n"
-            f"Ce code est valable {user._reset_expiry_minutes} minutes.\n\n"
-            f"Si vous n'avez pas demandé de réinitialisation, ignorez cet email "
-            f"et votre mot de passe restera inchangé.\n\n"
-            f"— Africa Mobile Networks"
-        )
-        html_body = render_to_string('emails/password_reset.html', {
-            'user': user,
-            'code': code,
-        })
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
+        text_body = f"Code OTP : {code}"
+        html_body = render_to_string('emails/password_reset.html', {'user': user, 'code': code})
+        msg = EmailMultiAlternatives(subject, text_body, settings.DEFAULT_FROM_EMAIL, [user.email])
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
-        logger.info("send_password_reset_email : code envoyé à %s (user=%d)", user.email, user_id)
-
-    except User.DoesNotExist:
-        logger.error("send_password_reset_email : user_id=%d introuvable", user_id)
-    except AttributeError:
-        # user._reset_expiry_minutes non défini si appelé directement
-        pass
+        logger.info("send_password_reset_email envoyé à %s", user.email)
     except Exception as exc:
-        logger.error("send_password_reset_email : échec SMTP user_id=%d : %s", user_id, exc)
-        raise self.retry(exc=exc)
+        logger.error("send_password_reset_email échec : %s", exc)

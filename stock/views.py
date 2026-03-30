@@ -16,6 +16,7 @@ from .models import (Discharge, DischargeItem, Equipment, FieldReport,
                      ReturnedItem, StockMovement)
 from .tasks import (send_hub_alert, whatsapp_discharge_created,
                     whatsapp_field_report_created)
+from .async_utils import run_async
 
 
 def is_admin(user):
@@ -276,7 +277,7 @@ def send_hub_alert_view(request):
         if not equipment_ids:
             return JsonResponse({'success': False, 'error': 'Sélectionnez au moins un équipement.'}, status=400)
 
-        send_hub_alert.delay(equipment_ids, request.user.id)
+        run_async(send_hub_alert, equipment_ids, request.user.id)
         return JsonResponse({'success': True, 'message': 'Alerte Hub envoyée en arrière-plan.'})
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Données invalides.'}, status=400)
@@ -399,10 +400,10 @@ def discharge_create(request):
                 # Trigger low-stock real-time notification if needed
                 if item['equipment'].is_low_stock:
                     from .tasks import notify_low_stock_realtime
-                    notify_low_stock_realtime.delay(item['equipment'].id)
+                    run_async(notify_low_stock_realtime, item['equipment'].id)
 
         # ── WhatsApp : résumé de la décharge envoyé en arrière-plan ──
-        whatsapp_discharge_created.delay(discharge.id)
+        run_async(whatsapp_discharge_created, discharge.id)
 
         messages.success(request, f'Décharge #{discharge.pk} créée avec succès.')
         return redirect('discharge_detail', pk=discharge.pk)
@@ -628,7 +629,7 @@ def field_report_create(request, discharge_pk):
             discharge.save()
 
         # ── WhatsApp : récapitulatif du rapport envoyé en arrière-plan ──
-        whatsapp_field_report_created.delay(report.id)
+        run_async(whatsapp_field_report_created, report.id)
 
         messages.success(request, f'Rapport #{report.pk} créé et décharge #{discharge.pk} clôturée.')
         return redirect('field_report_detail', pk=report.pk)
@@ -676,7 +677,7 @@ def ai_trigger_summary(request):
     cache_key = f'ai_report_{request.user.id}_{uuid.uuid4().hex[:8]}'
     # Marquer comme "en cours" immédiatement pour que le frontend sache
     cache.set(cache_key, {'status': 'pending'}, timeout=600)
-    ai_generate_summary.delay(cache_key, days=30)
+    run_async(ai_generate_summary, cache_key, days=30)
     return JsonResponse({'success': True, 'cache_key': cache_key})
 
 
@@ -781,7 +782,7 @@ def ai_trigger_suggestions(request):
 
     cache_key = f'ai_suggestions_{request.user.id}_{uuid.uuid4().hex[:8]}'
     cache.set(cache_key, {'status': 'pending'}, timeout=600)
-    ai_generate_suggestions.delay(cache_key, days=30)
+    run_async(ai_generate_suggestions, cache_key, days=30)
     return JsonResponse({'success': True, 'cache_key': cache_key})
 
 
