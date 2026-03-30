@@ -76,7 +76,7 @@ services:
         value: "smtp-relay.brevo.com"
 
       - key: EMAIL_PORT
-        value: "587"
+        value: "2525"
 
       - key: EMAIL_HOST_USER
         sync: false
