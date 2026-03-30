@@ -26,38 +26,50 @@
 
   /* ── Helpers ──────────────────────────────────────────────────────────── */
   const STORAGE_KEY = 'amn_tour_v2_done';
+  console.log("[AMN Tour] Chargement du script...");
 
   /**
    * Ouvre un modal Bootstrap en supprimant son backdrop natif
    * (driver.js fournit déjà son propre overlay sombre).
    */
   function openModal(modalId, onShown) {
+    console.log(`[AMN Tour] openModal appelé pour: ${modalId}`);
+    if (typeof bootstrap === 'undefined') {
+      console.error("[AMN Tour] Bootstrap non trouvé!");
+      onShown(); return;
+    }
     const modalEl = document.getElementById(modalId);
-    if (!modalEl) { onShown(); return; }
+    if (!modalEl) {
+      console.warn(`[AMN Tour] Élément modal non trouvé: ${modalId}`);
+      onShown(); return;
+    }
 
-    // Utilise getOrCreateInstance pour éviter les conflits avec les data-attributes HTML
     const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl, {
       backdrop: false,
       keyboard: false,
     });
 
-    // Si déjà ouvert, on passe à la suite directement
     if (modalEl.classList.contains('show')) {
+      console.log(`[AMN Tour] Modal ${modalId} est déjà ouvert.`);
       onShown();
       return;
     }
 
     const handler = () => {
+      console.log(`[AMN Tour] Modal ${modalId} ouvert (événement shown).`);
       modalEl.removeEventListener('shown.bs.modal', handler);
       onShown();
     };
     modalEl.addEventListener('shown.bs.modal', handler);
 
-    // Sécurité : si l'événement ne tire pas (ex: animation CSS bloquée)
+    // Sécurité accrue : 1.5s
     setTimeout(() => {
       modalEl.removeEventListener('shown.bs.modal', handler);
-      if (modalEl.classList.contains('show')) onShown();
-    }, 1200);
+      if (modalEl.classList.contains('show')) {
+        console.log(`[AMN Tour] Modal ${modalId} ouvert (via timeout).`);
+        onShown();
+      }
+    }, 1500);
 
     bsModal.show();
   }
@@ -75,20 +87,27 @@
     return Object.assign({
       animate: true,
       overlayColor: '#000',
-      overlayOpacity: 0.72,
+      overlayOpacity: 0.75,
       smoothScroll: true,
       allowKeyboardControl: true,
-      allowClose: true, // Autorise le "X" pour fermer
+      allowClose: true,
       showProgress: true,
       progressText: 'Étape {{current}} sur {{total}}',
       nextBtnText: 'Suivant →',
       prevBtnText: '← Précédent',
       doneBtnText: 'Terminer ✓',
       popoverClass: 'amn-tour-popover',
+      // On multiplie les chances de sauvegarder l'état
+      onClose: () => {
+        console.log("[AMN Tour] onClose déclenché.");
+        localStorage.setItem(STORAGE_KEY, '1');
+      },
       onCloseClick: () => {
+        console.log("[AMN Tour] onCloseClick déclenché.");
         localStorage.setItem(STORAGE_KEY, '1');
       },
       onDestroyed: () => {
+        console.log("[AMN Tour] onDestroyed déclenché.");
         localStorage.setItem(STORAGE_KEY, '1');
       },
     }, extraOpts);
@@ -206,21 +225,25 @@
       {
         popover: {
           title: '🎉 Vous êtes prêt !',
-          description:
-            'Vous connaissez maintenant l\'essentiel d\'AMN Stock. '
-            + 'Le bouton <strong>?</strong> en haut à droite vous permet '
-            + 'de relancer ce tutoriel à tout moment. Bonne gestion !',
-          side: 'over', align: 'center',
-        },
+          description: 'Le tableau de bord se mettra à jour en temps réel. Bonne gestion !',
+          side: 'bottom',
+          align: 'center',
+          onNextClick: (_el, _step, { driver: d }) => {
+            console.log("[AMN Tour] Fin du tour (Dashboard).");
+            localStorage.setItem(STORAGE_KEY, '1');
+            d.destroy();
+          }
+        }
       },
     ];
   }
 
   function createDashboardTour() {
     return driver(commonOpts({
-      onDestroyStarted: () => {
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        console.log("[AMN Tour] Destruction Dashboard...");
         closeModal('addModal');
-        // d.destroy() est implicite ici pour driver.js v1.x si on ne l'empêche pas
+        // On ne force plus d.destroy() pour laisser le cycle naturel s'il y est déjà.
       },
       steps: buildDashboardSteps(),
     }));
@@ -742,8 +765,12 @@
   };
 
   /* ── Auto-démarrage à la première visite ─────────────────────────────── */
-  document.addEventListener('DOMContentLoaded', function () {
-    if (localStorage.getItem(STORAGE_KEY)) return;
+  document.addEventListener('DOMContentLoaded',  function initAutoTour() {
+    console.log("[AMN Tour] Vérification auto-start...");
+    if (localStorage.getItem(STORAGE_KEY)) {
+      console.log("[AMN Tour] Déjà fini (localStorage présent).");
+      return;
+    }
 
     const page = document.body.dataset.page;
     /* Auto-start uniquement sur le Dashboard (première connexion) */
