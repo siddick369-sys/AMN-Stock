@@ -187,3 +187,24 @@ if not DEBUG:
 
     # Empêche le sniffing de type MIME
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+EMAIL_HOST = 'smtp-relay.brevo.com'
+EMAIL_PORT = 2525
+EMAIL_USE_TLS = True
+
+# --- TES IDENTIFIANTS BREVO ---
+# L'identifiant que Brevo t'a donné (celui de ton message)
+EMAIL_HOST_USER = '9f4b2a001@smtp-brevo.com'
+
+# Ta NOUVELLE clé secrète (que tu vas générer, pas celle postée ici)
+EMAIL_HOST_PASSWORD = 'K7VXJCdE8cx3rDmY'
+ADMIN_EMAIL = 'sasukenozel@gmail.com'
+
+# --- TRES IMPORTANT ---
+# Ici, mets l'email avec lequel tu as créé le compte Brevo (ex: alexis@gmail.com)
+# C'est l'adresse que les gens verront comme expéditeur.
+DEFAULT_FROM_EMAIL = 'sasukenozel@gmail.com'
+
