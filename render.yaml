@@ -3,21 +3,18 @@
 # Doc : https://render.com/docs/infrastructure-as-code
 #
 # Base de données : NeonDB (PostgreSQL serverless externe — neon.tech)
-# Cache / Broker  : Upstash Redis (externe — upstash.com)
+# Cache           : LocMemCache (local à l'instance)
 #
 # Services Render :
 #   1. amn-stock-web — Django / Gunicorn (Web Service, plan Free)
 #
-# ⚠️  Pas de workers Celery permanents (non disponibles sur le plan Free).
-#     Les tâches background (WhatsApp, IA) sont traitées par un worker
-#     éphémère déclenché via cron-job.org → /tasks/trigger-celery/
+# ⚠️  Pas de workers Celery (migration vers Threading local effectuée).
+#     Le cycle de stock est déclenché via /tasks/trigger-celery/ (cron-job.org).
 #
 # Variables à renseigner dans le Dashboard Render (sync: false) :
 #
 #   DATABASE_URL          → NeonDB pooled
 #                           postgresql://user:pass@ep-xxx-pooler.region.neon.tech/db?sslmode=require
-#   CELERY_BROKER_URL     → Upstash Redis
-#                           rediss://default:TOKEN@HOST:PORT
 #   SECRET_KEY            → chaîne aléatoire (min 50 chars)
 #   CRON_TRIGGER_TOKEN    → token hex 64 chars
 #                           générer : python -c "import secrets; print(secrets.token_hex(32))"
@@ -61,12 +58,6 @@ services:
       # Format : postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/dbname?sslmode=require
       - key: DATABASE_URL
         sync: false                          # ⚠️ OBLIGATOIRE — URL NeonDB pooled
-
-      # ── Redis Upstash (broker Celery + cache Django) ──
-      # Aller sur upstash.com → votre Redis → Details → "Redis URL"
-      # Format : rediss://default:TOKEN@HOST:PORT
-      - key: CELERY_BROKER_URL
-        sync: false                          # ⚠️ OBLIGATOIRE — URL Upstash
 
       # ── Email SMTP (Brevo recommandé) ──
       - key: EMAIL_BACKEND
