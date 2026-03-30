@@ -30,21 +30,34 @@
   /**
    * Ouvre un modal Bootstrap en supprimant son backdrop natif
    * (driver.js fournit déjà son propre overlay sombre).
-   * Appelle onShown() après la fin de l'animation CSS.
    */
   function openModal(modalId, onShown) {
     const modalEl = document.getElementById(modalId);
     if (!modalEl) { onShown(); return; }
 
-    const bsModal = new bootstrap.Modal(modalEl, {
+    // Utilise getOrCreateInstance pour éviter les conflits avec les data-attributes HTML
+    const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl, {
       backdrop: false,
       keyboard: false,
     });
 
-    modalEl.addEventListener('shown.bs.modal', function handler() {
+    // Si déjà ouvert, on passe à la suite directement
+    if (modalEl.classList.contains('show')) {
+      onShown();
+      return;
+    }
+
+    const handler = () => {
       modalEl.removeEventListener('shown.bs.modal', handler);
       onShown();
-    });
+    };
+    modalEl.addEventListener('shown.bs.modal', handler);
+
+    // Sécurité : si l'événement ne tire pas (ex: animation CSS bloquée)
+    setTimeout(() => {
+      modalEl.removeEventListener('shown.bs.modal', handler);
+      if (modalEl.classList.contains('show')) onShown();
+    }, 1200);
 
     bsModal.show();
   }
@@ -65,13 +78,16 @@
       overlayOpacity: 0.72,
       smoothScroll: true,
       allowKeyboardControl: true,
-      allowClose: false,
+      allowClose: true, // Autorise le "X" pour fermer
       showProgress: true,
       progressText: 'Étape {{current}} sur {{total}}',
       nextBtnText: 'Suivant →',
       prevBtnText: '← Précédent',
       doneBtnText: 'Terminer ✓',
       popoverClass: 'amn-tour-popover',
+      onCloseClick: () => {
+        localStorage.setItem(STORAGE_KEY, '1');
+      },
       onDestroyed: () => {
         localStorage.setItem(STORAGE_KEY, '1');
       },
@@ -202,9 +218,9 @@
 
   function createDashboardTour() {
     return driver(commonOpts({
-      onDestroyStarted: (_el, _step, { driver: d }) => {
+      onDestroyStarted: () => {
         closeModal('addModal');
-        d.destroy();
+        // d.destroy() est implicite ici pour driver.js v1.x si on ne l'empêche pas
       },
       steps: buildDashboardSteps(),
     }));
@@ -374,9 +390,8 @@
 
   function createDischargeCreateTour() {
     return driver(commonOpts({
-      onDestroyStarted: (_el, _step, { driver: d }) => {
+      onDestroyStarted: () => {
         closeModal('voiceModal');
-        d.destroy();
       },
       steps: buildDischargeCreateSteps(),
     }));
@@ -689,9 +704,8 @@
 
   function createUserListTour() {
     return driver(commonOpts({
-      onDestroyStarted: (_el, _step, { driver: d }) => {
+      onDestroyStarted: () => {
         closeModal('userModal');
-        d.destroy();
       },
       steps: buildUserListSteps(),
     }));
