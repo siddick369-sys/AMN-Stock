@@ -241,8 +241,12 @@
   function createDashboardTour() {
     return driver(commonOpts({
       onDestroyStarted: (_el, _step, { driver: d }) => {
-        console.log("[AMN Tour] Destruction Dashboard...");
+        // onDestroyStarted bloque la destruction dans driver.js v1.x — on doit
+        // appeler d.destroy() manuellement. Pour éviter la récursion infinie,
+        // on supprime d'abord le hook, puis on déclenche la vraie destruction.
+        d.config.onDestroyStarted = undefined;
         closeModal('addModal');
+        d.destroy();
       },
       steps: buildDashboardSteps(),
     }));
@@ -412,8 +416,10 @@
 
   function createDischargeCreateTour() {
     return driver(commonOpts({
-      onDestroyStarted: () => {
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        d.config.onDestroyStarted = undefined;
         closeModal('voiceModal');
+        d.destroy();
       },
       steps: buildDischargeCreateSteps(),
     }));
@@ -726,8 +732,10 @@
 
   function createUserListTour() {
     return driver(commonOpts({
-      onDestroyStarted: () => {
+      onDestroyStarted: (_el, _step, { driver: d }) => {
+        d.config.onDestroyStarted = undefined;
         closeModal('userModal');
+        d.destroy();
       },
       steps: buildUserListSteps(),
     }));

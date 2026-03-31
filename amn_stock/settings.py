@@ -2,6 +2,7 @@ import os
 import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv
+from decouple import config as decouple_config
 
 load_dotenv()
 
@@ -133,7 +134,8 @@ CRON_TRIGGER_TOKEN = os.environ.get('CRON_TRIGGER_TOKEN', '')
 
 # ── Groq AI ────────────────────────────────────────────────────────────────
 # Obtenir la clé sur https://console.groq.com/keys
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+# Utilise python-decouple : lit depuis .env en dev, variables d'environnement en prod
+GROQ_API_KEY = decouple_config("GROQ_API_KEY", default="")
 
 # ── Green API (WhatsApp) ────────────────────────────────────────────────────
 # Obtenir les credentials sur https://console.green-api.com/
