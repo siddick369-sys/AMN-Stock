@@ -2,197 +2,399 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Rapport de Stock AMN — {{ generated_at }}</title>
+  <title>Rapport AMN Stock — {{ generated_at }}</title>
   <style>
-    /* ── xhtml2pdf compatible styles ── */
+    /* ═══════════════════════════════════════════════════════════
+       PAGE SETUP — WeasyPrint @page avec header/footer flottants
+       ═══════════════════════════════════════════════════════════ */
     @page {
       size: A4;
-      margin: 2cm 2cm 2.5cm 2cm;
-      @frame header_frame {
-        -pdf-frame-content: header_content;
-        left: 2cm; right: 2cm; top: 0.6cm; height: 1.4cm;
+      margin: 2.2cm 1.8cm 2.5cm 1.8cm;
+
+      @top-left {
+        content: "AFRICA MOBILE NETWORKS";
+        font-family: 'DejaVu Sans', 'Liberation Sans', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        font-weight: bold;
+        color: #0d47a1;
+        letter-spacing: 0.5pt;
+        vertical-align: bottom;
+        padding-bottom: 4pt;
+        border-bottom: 1.5pt solid #0d47a1;
       }
-      @frame footer_frame {
-        -pdf-frame-content: footer_content;
-        left: 2cm; right: 2cm; bottom: 0.5cm; height: 0.8cm;
+      @top-right {
+        content: "Système de Gestion de Stock";
+        font-family: 'DejaVu Sans', 'Liberation Sans', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #888;
+        vertical-align: bottom;
+        padding-bottom: 4pt;
+        border-bottom: 1.5pt solid #e0e0e0;
+      }
+      @bottom-center {
+        content: "Page " counter(page) " / " counter(pages) "  —  Rapport confidentiel AMN  —  " string(report-date);
+        font-family: 'DejaVu Sans', 'Liberation Sans', Helvetica, Arial, sans-serif;
+        font-size: 7pt;
+        color: #aaa;
+        border-top: 0.75pt solid #e0e0e0;
+        padding-top: 4pt;
       }
     }
+
+    @page :first {
+      @top-left  { content: ""; border: none; }
+      @top-right { content: ""; border: none; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       BASE
+       ═══════════════════════════════════════════════════════════ */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: Helvetica, Arial, sans-serif;
-      font-size: 10pt;
+      font-family: 'DejaVu Sans', 'Liberation Sans', Helvetica, Arial, sans-serif;
+      font-size: 9.5pt;
       color: #1a1a2e;
-      line-height: 1.6;
+      line-height: 1.65;
+      background: #fff;
     }
 
-    /* ── HEADER / FOOTER ── */
-    #header_content {
-      border-bottom: 2px solid #0d47a1;
-      padding-bottom: 4px;
-      display: table;
-      width: 100%;
-    }
-    #header_content .logo-cell { display: table-cell; width: 50%; vertical-align: middle; }
-    #header_content .date-cell  { display: table-cell; width: 50%; text-align: right; vertical-align: middle; color: #666; font-size: 8pt; }
-    #footer_content {
-      border-top: 1px solid #ccc;
-      text-align: center;
-      color: #888;
-      font-size: 7.5pt;
-      padding-top: 3px;
+    /* String pour le footer */
+    .report-date-anchor {
+      string-set: report-date content();
+      display: none;
     }
 
-    /* ── TITLE PAGE BLOCK ── */
+    /* ═══════════════════════════════════════════════════════════
+       COVER — PAGE 1
+       ═══════════════════════════════════════════════════════════ */
     .cover {
-      background: #0d47a1;
+      background: linear-gradient(135deg, #0d47a1 0%, #1565c0 55%, #0e5ca8 100%);
       color: white;
-      padding: 20px 24px;
-      border-radius: 6px;
-      margin-bottom: 20px;
+      padding: 28pt 28pt 24pt 28pt;
+      border-radius: 10pt;
+      margin-bottom: 20pt;
+      position: relative;
+      overflow: hidden;
     }
-    .cover h1 { font-size: 18pt; margin: 0 0 4px 0; }
-    .cover .sub { font-size: 10pt; opacity: 0.85; margin: 0; }
-    .cover .meta { font-size: 8pt; opacity: 0.7; margin-top: 8px; }
 
-    /* ── STAT BOXES ── */
-    .stats-grid { display: table; width: 100%; margin-bottom: 18px; border-spacing: 6px; }
-    .stat-box {
-      display: table-cell;
-      width: 16%;
-      background: #e3f2fd;
-      border-left: 4px solid #0d47a1;
-      padding: 8px 10px;
-      text-align: center;
-      border-radius: 4px;
+    /* Accent orange en bas à droite */
+    .cover::after {
+      content: "";
+      position: absolute;
+      bottom: -10pt;
+      right: -10pt;
+      width: 80pt;
+      height: 80pt;
+      background: rgba(230, 81, 0, 0.55);
+      border-radius: 50%;
     }
-    .stat-box.warn  { background: #fff3e0; border-left-color: #e65100; }
-    .stat-box.danger { background: #ffebee; border-left-color: #c62828; }
-    .stat-box .val  { font-size: 16pt; font-weight: bold; color: #0d47a1; display: block; }
-    .stat-box.warn  .val  { color: #e65100; }
-    .stat-box.danger .val { color: #c62828; }
-    .stat-box .lbl  { font-size: 7pt; color: #555; }
 
-    /* ── SECTION TITLES ── */
-    h2 {
-      font-size: 12pt;
-      color: #0d47a1;
-      border-bottom: 1.5px solid #0d47a1;
-      padding-bottom: 3px;
-      margin-top: 18px;
-      margin-bottom: 8px;
+    .cover-top {
+      display: flex;
+      align-items: center;
+      margin-bottom: 14pt;
     }
-    h3 { font-size: 10.5pt; color: #1565c0; margin: 12px 0 4px; }
-    h4 { font-size: 10pt;   color: #333;    margin: 8px 0 3px; }
 
-    /* ── BODY TEXT ── */
-    p  { margin: 4px 0 8px; }
-    ul { margin: 4px 0 8px 16px; padding: 0; }
-    li { margin-bottom: 3px; }
-    strong { color: #0d47a1; }
+    .cover-logo {
+      width: 36pt;
+      height: 36pt;
+      background: rgba(255,255,255,0.15);
+      border: 2pt solid rgba(255,255,255,0.4);
+      border-radius: 8pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12pt;
+      font-size: 16pt;
+      font-weight: 900;
+      color: white;
+      flex-shrink: 0;
+    }
 
-    /* ── DIVIDER ── */
-    hr { border: none; border-top: 1px solid #ddd; margin: 14px 0; }
-
-    /* ── BADGES ── */
-    .badge {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 10px;
+    .cover-org {
       font-size: 8pt;
-      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1.5pt;
+      opacity: 0.75;
+      margin-bottom: 2pt;
     }
-    .badge-urgent   { background: #ffcdd2; color: #b71c1c; }
-    .badge-important { background: #ffe0b2; color: #e65100; }
-    .badge-plan     { background: #fff9c4; color: #f57f17; }
-    .badge-continue { background: #c8e6c9; color: #1b5e20; }
 
-    /* ── NOTE BOX ── */
+    .cover-title {
+      font-size: 18pt;
+      font-weight: 700;
+      letter-spacing: -0.3pt;
+      line-height: 1.2;
+    }
+
+    .cover-subtitle {
+      font-size: 10pt;
+      opacity: 0.85;
+      margin-top: 6pt;
+    }
+
+    .cover-meta {
+      display: flex;
+      gap: 20pt;
+      margin-top: 16pt;
+      padding-top: 14pt;
+      border-top: 1pt solid rgba(255,255,255,0.2);
+      font-size: 8pt;
+      opacity: 0.8;
+    }
+
+    .cover-meta-item strong {
+      display: block;
+      font-size: 9pt;
+      opacity: 1;
+      color: white;
+      margin-bottom: 1pt;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       STATS — BANDE DE CHIFFRES CLÉS
+       ═══════════════════════════════════════════════════════════ */
+    .stats-section {
+      margin-bottom: 18pt;
+    }
+
+    .stats-grid {
+      display: flex;
+      gap: 8pt;
+    }
+
+    .stat-card {
+      flex: 1;
+      background: #f8faff;
+      border: 1pt solid #e3eaf7;
+      border-top: 3pt solid #0d47a1;
+      border-radius: 6pt;
+      padding: 10pt 8pt 8pt;
+      text-align: center;
+    }
+
+    .stat-card.warn {
+      border-top-color: #e65100;
+      background: #fff8f5;
+      border-color: #ffe0cc;
+    }
+
+    .stat-card.danger {
+      border-top-color: #c62828;
+      background: #fff5f5;
+      border-color: #ffd0d0;
+    }
+
+    .stat-card .val {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #0d47a1;
+      line-height: 1;
+      display: block;
+      margin-bottom: 3pt;
+    }
+
+    .stat-card.warn .val  { color: #e65100; }
+    .stat-card.danger .val { color: #c62828; }
+
+    .stat-card .lbl {
+      font-size: 6.5pt;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+      line-height: 1.3;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       NOTE IA
+       ═══════════════════════════════════════════════════════════ */
     .ai-note {
-      background: #f3f4f6;
-      border-left: 4px solid #7c83fd;
-      padding: 8px 12px;
-      font-size: 8.5pt;
-      color: #444;
-      margin-bottom: 16px;
-      border-radius: 0 4px 4px 0;
+      background: linear-gradient(90deg, #ede7f6, #f3e5f5);
+      border-left: 4pt solid #7c3aed;
+      border-radius: 0 6pt 6pt 0;
+      padding: 9pt 13pt;
+      margin-bottom: 18pt;
+      font-size: 8pt;
+      color: #4a1d8a;
+      line-height: 1.5;
     }
 
-    /* ── PAGE BREAK ── */
+    .ai-note .ai-label {
+      font-weight: 700;
+      font-size: 8.5pt;
+      display: block;
+      margin-bottom: 2pt;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       TITRES DE SECTION
+       ═══════════════════════════════════════════════════════════ */
+    h2 {
+      font-size: 11.5pt;
+      font-weight: 700;
+      color: #0d47a1;
+      padding: 6pt 10pt;
+      background: linear-gradient(90deg, #e3f0ff, #f0f7ff);
+      border-left: 4pt solid #0d47a1;
+      border-radius: 0 5pt 5pt 0;
+      margin: 16pt 0 8pt 0;
+    }
+
+    h3 {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #1565c0;
+      margin: 12pt 0 5pt 0;
+      padding-bottom: 2pt;
+      border-bottom: 0.75pt solid #c5d9f0;
+    }
+
+    h4 {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #333;
+      margin: 8pt 0 3pt 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CORPS DU TEXTE
+       ═══════════════════════════════════════════════════════════ */
+    p {
+      margin: 4pt 0 8pt 0;
+      text-align: justify;
+    }
+
+    ul {
+      margin: 4pt 0 10pt 16pt;
+      padding: 0;
+    }
+
+    li {
+      margin-bottom: 3pt;
+    }
+
+    strong {
+      font-weight: 700;
+      color: #0d47a1;
+    }
+
+    em { font-style: italic; }
+
+    hr {
+      border: none;
+      border-top: 0.75pt solid #e0e8f4;
+      margin: 14pt 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       BADGES DE PRIORITÉ (remplacent les emojis 🔴🟠🟡🟢)
+       ═══════════════════════════════════════════════════════════ */
+    .pri {
+      display: inline-block;
+      padding: 1.5pt 6pt;
+      border-radius: 10pt;
+      font-size: 7pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4pt;
+      vertical-align: middle;
+      margin-right: 3pt;
+    }
+
+    .pri-urgent    { background: #ffcdd2; color: #b71c1c; border: 0.75pt solid #ef9a9a; }
+    .pri-important { background: #ffe0b2; color: #bf360c; border: 0.75pt solid #ffcc80; }
+    .pri-plan      { background: #fff9c4; color: #f57f17; border: 0.75pt solid #fff176; }
+    .pri-continu   { background: #c8e6c9; color: #1b5e20; border: 0.75pt solid #a5d6a7; }
+
+    /* ═══════════════════════════════════════════════════════════
+       SAUT DE PAGE
+       ═══════════════════════════════════════════════════════════ */
     .page-break { page-break-before: always; }
   </style>
 </head>
 <body>
 
-<!-- ── HEADER (répété sur chaque page) ── -->
-<div id="header_content">
-  <div class="logo-cell">
-    <strong style="color:#0d47a1; font-size:11pt;">&#9679; AFRICA MOBILE NETWORKS</strong>
-    <span style="color:#888; font-size:8pt;"> — Système de Gestion de Stock</span>
-  </div>
-  <div class="date-cell">Généré le {{ generated_at }}</div>
-</div>
+<!-- Ancre invisible pour string() dans le footer -->
+<span class="report-date-anchor">{{ generated_at }}</span>
 
-<!-- ── FOOTER (répété sur chaque page) ── -->
-<div id="footer_content">
-  Rapport confidentiel AMN — Document généré automatiquement par l'IA (Groq / LLaMA 3.3) — {{ generated_at }}
+<!-- ══════════════════════════════════════════
+     COUVERTURE
+══════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-logo">AMN</div>
+    <div>
+      <div class="cover-org">Africa Mobile Networks</div>
+      <div class="cover-title">Rapport de Gestion de Stock</div>
+    </div>
+  </div>
+  <div class="cover-subtitle">
+    Analyse IA des activit&#233;s &#8212; P&#233;riode&#160;: {{ period_days }} derniers jours
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <strong>G&#233;n&#233;r&#233; le</strong>
+      {{ generated_at }}
+    </div>
+    <div class="cover-meta-item">
+      <strong>Mod&#232;le IA</strong>
+      LLaMA 3.3 70B via Groq
+    </div>
+    <div class="cover-meta-item">
+      <strong>Classification</strong>
+      Confidentiel interne
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════
-     PAGE 1 — COUVERTURE + STATS + RAPPORT
-═══════════════════════════════════════════ -->
-
-<!-- Bloc de couverture -->
-<div class="cover">
-  <h1>Rapport de Gestion de Stock</h1>
-  <p class="sub">Analyse IA des activités — Période : {{ period_days }} derniers jours</p>
-  <p class="meta">Africa Mobile Networks (AMN) &nbsp;|&nbsp; Généré le {{ generated_at }}</p>
-</div>
-
-<!-- Note IA -->
-<div class="ai-note">
-  <strong>&#x1F916; Rapport généré par Intelligence Artificielle</strong> —
-  Ce document a été rédigé automatiquement par le modèle LLaMA 3.3 70B via Groq
-  à partir des données réelles de la base de données AMN Stock.
-  Période d'analyse : <strong>{{ period_days }} jours</strong>.
-</div>
-
-<!-- Statistiques globales -->
+     STATISTIQUES GLOBALES
+══════════════════════════════════════════ -->
 {% if stats %}
-<div class="stats-grid">
-  <div class="stat-box">
-    <span class="val">{{ stats.total_equipment }}</span>
-    <span class="lbl">Types équipements</span>
-  </div>
-  <div class="stat-box">
-    <span class="val">{{ stats.total_units }}</span>
-    <span class="lbl">Unités en stock</span>
-  </div>
-  <div class="stat-box {% if stats.total_defective > 0 %}warn{% endif %}">
-    <span class="val">{{ stats.total_defective }}</span>
-    <span class="lbl">Défectueux</span>
-  </div>
-  <div class="stat-box {% if stats.low_stock_count > 0 %}danger{% endif %}">
-    <span class="val">{{ stats.low_stock_count }}</span>
-    <span class="lbl">Stock critique</span>
-  </div>
-  <div class="stat-box">
-    <span class="val">{{ stats.total_discharges }}</span>
-    <span class="lbl">Décharges</span>
-  </div>
-  <div class="stat-box">
-    <span class="val">{{ stats.total_reports }}</span>
-    <span class="lbl">Rapports terrain</span>
+<div class="stats-section">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="val">{{ stats.total_equipment|default:"—" }}</span>
+      <span class="lbl">Types<br>&#233;quipements</span>
+    </div>
+    <div class="stat-card">
+      <span class="val">{{ stats.total_units|default:"—" }}</span>
+      <span class="lbl">Unit&#233;s<br>en stock</span>
+    </div>
+    <div class="stat-card {% if stats.total_defective %}warn{% endif %}">
+      <span class="val">{{ stats.total_defective|default:"0" }}</span>
+      <span class="lbl">Unit&#233;s<br>d&#233;fectueuses</span>
+    </div>
+    <div class="stat-card {% if stats.low_stock_count %}danger{% endif %}">
+      <span class="val">{{ stats.low_stock_count|default:"0" }}</span>
+      <span class="lbl">Stock<br>critique</span>
+    </div>
+    <div class="stat-card">
+      <span class="val">{{ stats.total_discharges|default:"—" }}</span>
+      <span class="lbl">D&#233;charges<br>cr&#233;&#233;es</span>
+    </div>
+    <div class="stat-card">
+      <span class="val">{{ stats.total_reports|default:"—" }}</span>
+      <span class="lbl">Rapports<br>terrain</span>
+    </div>
   </div>
 </div>
 {% endif %}
 
+<!-- Note IA -->
+<div class="ai-note">
+  <span class="ai-label">[IA] Rapport g&#233;n&#233;r&#233; automatiquement par Intelligence Artificielle</span>
+  Ce document a &#233;t&#233; r&#233;dig&#233; par le mod&#232;le LLaMA 3.3 70B (Groq) &#224; partir
+  des donn&#233;es r&#233;elles de la base AMN Stock. P&#233;riode d'analyse&#160;:
+  <strong>{{ period_days }} jours</strong>. Les recommandations sont indicatives
+  et doivent &#234;tre valid&#233;es par le Regional Manager.
+</div>
+
 <hr>
 
-<!-- ── Contenu Markdown converti en HTML simple ── -->
-<!-- xhtml2pdf ne supporte pas le Markdown natif —
-     On affiche le texte brut mis en forme via CSS.
-     Pour le rendu Markdown complet, utiliser une bibliothèque
-     comme markdown2 (optionnel — intégré dans la vue si disponible). -->
+<!-- ══════════════════════════════════════════
+     CONTENU DU RAPPORT (Markdown → HTML)
+══════════════════════════════════════════ -->
 <div id="report-body">
   {{ content_html|safe }}
 </div>

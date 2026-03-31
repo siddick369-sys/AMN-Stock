@@ -702,30 +702,32 @@ def ai_report_status(request, cache_key):
 @login_required
 @user_passes_test(is_admin)
 def ai_generate_pdf(request, cache_key):
-    """Génère et retourne le rapport IA en PDF via xhtml2pdf."""
-    from io import BytesIO
+    """Génère et retourne le rapport IA en PDF via WeasyPrint (CSS3 complet)."""
     from django.core.cache import cache
     from django.template.loader import render_to_string
-    from xhtml2pdf import pisa
 
     data = cache.get(cache_key)
     if not data or data.get('status') != 'ready':
         return JsonResponse({'error': 'Rapport non disponible. Relancez l\'analyse.'}, status=404)
 
-    # Convert Markdown → HTML for xhtml2pdf
     try:
         import re
         md = data['content']
 
-        # ── Supprimer les caractères que xhtml2pdf/ReportLab ne peut pas rendre ──
-        # Les emojis (🔴🟠🟡🟢📊✅⚠️…) sont dans le plan supplémentaire Unicode
-        # (U+10000 – U+10FFFF) ou dans les blocs "Misc Symbols" / "Dingbats".
-        # ReportLab ne dispose pas des polices pour les rendre → crash pisa.
-        md = re.sub(r'[\U00010000-\U0010FFFF]', '', md)  # plan supplémentaire (tous les emoji)
-        md = re.sub(r'[\u2600-\u27BF]', '', md)           # Misc Symbols + Dingbats (☀⚡✈…)
-        md = re.sub(r'[\u2B00-\u2BFF]', '', md)           # Misc Symbols Extended (⬛⬜…)
-        md = re.sub(r'[\u1F000-\uFFFF]', '', md)          # Mahjong / playing cards / autres blocs exotiques
+        # ── Convertir les emojis de priorité en badges HTML colorés ──────────
+        # Groq génère 🔴🟠🟡🟢 pour les niveaux d'urgence → badges CSS lisibles en PDF.
+        md = md.replace('\U0001f534', '<span class="pri pri-urgent">URGENT</span>')
+        md = md.replace('\U0001f7e0', '<span class="pri pri-important">IMPORTANT</span>')
+        md = md.replace('\U0001f7e1', '<span class="pri pri-plan">A PLANIFIER</span>')
+        md = md.replace('\U0001f7e2', '<span class="pri pri-continu">CONTINU</span>')
 
+        # ── Supprimer les emojis restants (WeasyPrint peut en afficher certains
+        #    avec DejaVu mais la couverture est incomplète) ─────────────────────
+        md = re.sub(r'[\U00010000-\U0010FFFF]', '', md)  # plan supplémentaire
+        md = re.sub(r'[\u2600-\u27BF]', '', md)           # Misc Symbols + Dingbats
+        md = re.sub(r'[\u2B00-\u2BFF]', '', md)           # Misc Symbols Extended
+
+        # ── Markdown → HTML ────────────────────────────────────────────────────
         # Headers
         md = re.sub(r'^### (.+)$', r'<h3>\1</h3>', md, flags=re.MULTILINE)
         md = re.sub(r'^## (.+)$',  r'<h2>\1</h2>', md, flags=re.MULTILINE)
@@ -734,7 +736,7 @@ def ai_generate_pdf(request, cache_key):
         md = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', md)
         md = re.sub(r'\*(.+?)\*',     r'<em>\1</em>',         md)
         md = re.sub(r'_(.+?)_',       r'<em>\1</em>',         md)
-        # Bullet lists — group consecutive lines starting with - or •
+        # Bullet lists
         lines = md.split('\n')
         html_lines = []
         in_list = False
@@ -745,13 +747,12 @@ def ai_generate_pdf(request, cache_key):
                 if not in_list:
                     html_lines.append('<ul>')
                     in_list = True
-                text = stripped[2:].strip()
-                html_lines.append(f'<li>{text}</li>')
+                html_lines.append(f'<li>{stripped[2:].strip()}</li>')
             else:
                 if in_list:
                     html_lines.append('</ul>')
                     in_list = False
-                if stripped == '---' or stripped == '***':
+                if stripped in ('---', '***'):
                     html_lines.append('<hr>')
                 elif stripped == '':
                     html_lines.append('<br>')
@@ -761,42 +762,35 @@ def ai_generate_pdf(request, cache_key):
             html_lines.append('</ul>')
         content_html = '\n'.join(html_lines)
     except Exception:
-        content_html = f"<pre>{data['content']}</pre>"
+        content_html = f'<pre>{data["content"]}</pre>'
 
     html_string = render_to_string('stock/report_pdf.html', {
         'content_html': content_html,
         'generated_at': data.get('generated_at', ''),
-        'period_days': data.get('period_days', 30),
-        'stats': data.get('stats', {}),
+        'period_days':  data.get('period_days', 30),
+        'stats':        data.get('stats', {}),
     })
 
-    pdf_buffer = BytesIO()
-    pisa_status = pisa.CreatePDF(html_string, dest=pdf_buffer, encoding='utf-8')
-
-    if pisa_status.err:
-        # Fallback : PDF texte brut si le rendu HTML complexe échoue
-        pdf_buffer = BytesIO()
-        plain_html = (
-            '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-            '<style>body{font-family:Helvetica,Arial;font-size:10pt;margin:2cm;}'
-            'pre{white-space:pre-wrap;word-break:break-word;font-size:9pt;}</style>'
-            '</head><body>'
-            f'<h2>Rapport AMN Stock — {data.get("generated_at", "")}</h2>'
-            f'<pre>{data["content"]}</pre>'
-            '</body></html>'
+    try:
+        from weasyprint import HTML as WeasyHTML
+        pdf_bytes = WeasyHTML(
+            string=html_string,
+            base_url=request.build_absolute_uri('/'),
+        ).write_pdf()
+    except Exception as exc:
+        logger.error("ai_generate_pdf WeasyPrint error: %s", exc)
+        return HttpResponse(
+            '<html><body style="font-family:sans-serif;padding:2rem">'
+            '<h2>Erreur de g&#233;n&#233;ration PDF</h2>'
+            f'<p>D&#233;tail&#160;: {exc}</p>'
+            '<p><a href="javascript:history.back()">Retour</a></p>'
+            '</body></html>',
+            status=500, content_type='text/html; charset=utf-8',
         )
-        pisa_status2 = pisa.CreatePDF(plain_html, dest=pdf_buffer, encoding='utf-8')
-        if pisa_status2.err:
-            return HttpResponse(
-                '<html><body><h2>Erreur de génération PDF</h2>'
-                '<p>Impossible de générer le PDF. Réessayez depuis l\'application.</p>'
-                '</body></html>',
-                status=500, content_type='text/html; charset=utf-8',
-            )
 
     from django.utils import timezone as tz
     filename = f"AMN_Rapport_Stock_{tz.now().strftime('%Y%m%d_%H%M')}.pdf"
-    response = HttpResponse(pdf_buffer.getvalue(), content_type='application/pdf')
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
