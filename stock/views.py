@@ -669,13 +669,20 @@ def field_report_list(request):
 @user_passes_test(is_admin)
 @require_POST
 def ai_trigger_summary(request):
-    """Lance la tâche Celery de génération du rapport IA. Retourne le cache_key."""
+    """Lance la génération du rapport IA dans un thread daemon. Retourne le cache_key."""
     import uuid
+    from django.conf import settings as dj_settings
     from django.core.cache import cache
     from .tasks import ai_generate_summary
 
+    if not getattr(dj_settings, 'GROQ_API_KEY', ''):
+        return JsonResponse({
+            'success': False,
+            'error': "GROQ_API_KEY n'est pas configurée. "
+                     "Ajoutez-la dans les variables d'environnement Render.",
+        }, status=400)
+
     cache_key = f'ai_report_{request.user.id}_{uuid.uuid4().hex[:8]}'
-    # Marquer comme "en cours" immédiatement pour que le frontend sache
     cache.set(cache_key, {'status': 'pending'}, timeout=600)
     run_async(ai_generate_summary, cache_key, days=30)
     return JsonResponse({'success': True, 'cache_key': cache_key})
@@ -775,10 +782,18 @@ def ai_generate_pdf(request, cache_key):
 @user_passes_test(is_admin)
 @require_POST
 def ai_trigger_suggestions(request):
-    """Lance la tâche Celery de génération des suggestions IA."""
+    """Lance la génération des suggestions IA dans un thread daemon."""
     import uuid
+    from django.conf import settings as dj_settings
     from django.core.cache import cache
     from .tasks import ai_generate_suggestions
+
+    if not getattr(dj_settings, 'GROQ_API_KEY', ''):
+        return JsonResponse({
+            'success': False,
+            'error': "GROQ_API_KEY n'est pas configurée. "
+                     "Ajoutez-la dans les variables d'environnement Render.",
+        }, status=400)
 
     cache_key = f'ai_suggestions_{request.user.id}_{uuid.uuid4().hex[:8]}'
     cache.set(cache_key, {'status': 'pending'}, timeout=600)
