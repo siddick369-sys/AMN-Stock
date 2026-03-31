@@ -116,29 +116,72 @@ def check_low_stock():
 def notify_low_stock_realtime(equipment_id):
     """
     Appelée après chaque sortie faisant tomber un item sous le seuil.
+    Exécutée dans un thread daemon via run_async — appels bloquants autorisés.
     """
     from stock.models import Equipment
     from django.core.cache import cache
+    from .whatsapp import send_whatsapp
 
     try:
         equipment = Equipment.objects.get(id=equipment_id)
+    except Equipment.DoesNotExist:
+        logger.error("notify_low_stock_realtime : équipement introuvable (id=%s)", equipment_id)
+        return
 
-        # ── cache frontend (polling JS) ────────────────────────────────
-        notification = {
-            'id': equipment_id,
-            'name': equipment.name,
-            'reference': equipment.reference,
-            'quantity': equipment.quantity,
-            'timestamp': timezone.now().isoformat(),
-        }
+    threshold = LOW_STOCK_THRESHOLD
+
+    # ── cache frontend (polling JS) ────────────────────────────────────
+    notification = {
+        'id': equipment_id,
+        'name': equipment.name,
+        'reference': equipment.reference,
+        'quantity': equipment.quantity,
+        'timestamp': timezone.now().isoformat(),
+    }
+    try:
         cache.set(f'low_stock_notification_{equipment_id}', notification, timeout=3600)
         notifs = cache.get('low_stock_notifications', [])
         if equipment_id not in [n['id'] for n in notifs]:
             notifs.append(notification)
             cache.set('low_stock_notifications', notifs, timeout=3600)
+    except Exception as exc:
+        logger.warning("notify_low_stock_realtime : erreur cache (%s) — on continue", exc)
 
-        # ── WhatsApp ───────────────────────────────────────────────────
-        threshold = LOW_STOCK_THRESHOLD
+    # ── email (fiable même si WA ne fonctionne pas) ────────────────────
+    admin_emails = list(
+        User.objects.filter(is_staff=True, is_active=True)
+        .exclude(email='')
+        .values_list('email', flat=True)
+    )
+    if getattr(settings, 'ADMIN_EMAIL', None):
+        for email in settings.ADMIN_EMAIL:
+            if email and email not in admin_emails:
+                admin_emails.append(email)
+
+    if admin_emails:
+        subject = f"[AMN Stock] ⚠️ Stock faible : {equipment.name} — {_now_str()}"
+        body = (
+            f"Bonjour,\n\n"
+            f"L'équipement suivant est passé sous le seuil d'alerte (≤ {threshold}) :\n\n"
+            f"  • {equipment.name} ({equipment.reference}) : {equipment.quantity} unité(s) restante(s)\n\n"
+            f"Veuillez procéder au réapprovisionnement dès que possible.\n\n"
+            f"— Système AMN Stock\n{_now_str()}"
+        )
+        try:
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, admin_emails, fail_silently=False)
+            logger.info("notify_low_stock_realtime : email envoyé → %s", admin_emails)
+        except Exception as exc:
+            logger.error("notify_low_stock_realtime : échec email : %s", exc)
+
+    # ── WhatsApp — synchrone (déjà dans un thread daemon via run_async) ─
+    wa_instance  = getattr(settings, 'GREENAPI_INSTANCE_ID', '')
+    wa_token     = getattr(settings, 'GREENAPI_TOKEN', '')
+    if not wa_instance or not wa_token:
+        logger.warning(
+            "notify_low_stock_realtime : GREENAPI_INSTANCE_ID ou GREENAPI_TOKEN "
+            "non configuré — message WA ignoré pour %s", equipment.name
+        )
+    else:
         wa_msg = (
             f"{_header('⚠️', 'Stock faible détecté')}\n\n"
             f"📦 Équipement : *{equipment.name}*\n"
@@ -147,11 +190,12 @@ def notify_low_stock_realtime(equipment_id):
             f"➡️ Action requise : réapprovisionnement ou commande urgente.\n"
             f"🕐 {_now_str()}"
         )
-        send_whatsapp_async(wa_msg)
-        logger.info("notify_low_stock_realtime : WA déclenché en arrière-plan pour %s", equipment.name)
-
-    except Equipment.DoesNotExist:
-        logger.error("notify_low_stock_realtime : équipement introuvable (id=%s)", equipment_id)
+        # Appel synchrone — on est déjà dans un thread daemon (run_async)
+        ok = send_whatsapp(wa_msg)
+        if ok:
+            logger.info("notify_low_stock_realtime : WA envoyé pour %s", equipment.name)
+        else:
+            logger.error("notify_low_stock_realtime : échec WA pour %s", equipment.name)
 
 
 # ═══════════════════════════════════════════════════════════════════════
