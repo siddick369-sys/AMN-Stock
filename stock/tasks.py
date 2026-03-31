@@ -23,7 +23,7 @@ from django.core.mail import send_mail, EmailMultiAlternatives
 from django.utils import timezone
 from django.template.loader import render_to_string
 
-from .whatsapp import send_whatsapp
+from .whatsapp import send_whatsapp_async
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def check_low_stock():
         f"📋 Réapprovisionnement requis.\n"
         f"🕐 {_now_str()}"
     )
-    send_whatsapp(wa_msg)
+    send_whatsapp_async(wa_msg)
 
     return f"{low_items.count()} équipement(s) en stock faible signalé(s)."
 
@@ -144,8 +144,8 @@ def notify_low_stock_realtime(equipment_id):
             f"➡️ Action requise : réapprovisionnement ou commande urgente.\n"
             f"🕐 {_now_str()}"
         )
-        send_whatsapp(wa_msg)
-        logger.info("notify_low_stock_realtime : WA envoyé pour %s", equipment.name)
+        send_whatsapp_async(wa_msg)
+        logger.info("notify_low_stock_realtime : WA déclenché en arrière-plan pour %s", equipment.name)
 
     except Equipment.DoesNotExist:
         logger.error("notify_low_stock_realtime : équipement introuvable (id=%s)", equipment_id)
@@ -186,11 +186,8 @@ def whatsapp_discharge_created(discharge_id):
         f"🕐 {_now_str()}"
     )
 
-    ok = send_whatsapp(wa_msg)
-    if not ok:
-        logger.warning("whatsapp_discharge_created : échec envoi WA pour décharge #%s", discharge_id)
-
-    logger.info("whatsapp_discharge_created : WA envoyé pour décharge #%s", discharge_id)
+    send_whatsapp_async(wa_msg)
+    logger.info("whatsapp_discharge_created : WA déclenché en arrière-plan pour décharge #%s", discharge_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -251,11 +248,8 @@ def whatsapp_field_report_created(report_id):
         f"🕐 {_now_str()}"
     )
 
-    ok = send_whatsapp(wa_msg)
-    if not ok:
-        logger.warning("whatsapp_field_report_created : échec envoi WA pour rapport #%s", report_id)
-
-    logger.info("whatsapp_field_report_created : WA envoyé pour rapport #%s", report_id)
+    send_whatsapp_async(wa_msg)
+    logger.info("whatsapp_field_report_created : WA déclenché en arrière-plan pour rapport #%s", report_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -310,11 +304,8 @@ def send_hub_alert(equipment_ids, user_id):
             f"📬 Un email récapitulatif a également été envoyé au Hub.\n"
             f"⚙️  Veuillez prendre les dispositions nécessaires."
         )
-        ok = send_whatsapp(wa_msg)
-        if not ok:
-            logger.warning("send_hub_alert : échec envoi WA Hub")
-
-        logger.info("send_hub_alert : alerte envoyée pour %d équipement(s).", equipments.count())
+        send_whatsapp_async(wa_msg)
+        logger.info("send_hub_alert : WA déclenché en arrière-plan pour %d équipement(s).", equipments.count())
     except User.DoesNotExist:
         logger.error("send_hub_alert : utilisateur introuvable (id=%s)", user_id)
     except Exception as exc:

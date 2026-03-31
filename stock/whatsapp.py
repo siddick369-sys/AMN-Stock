@@ -13,6 +13,7 @@ Configuration requise (settings.py / .env) :
 """
 
 import logging
+import threading
 import time
 from typing import Optional
 
@@ -154,12 +155,16 @@ def get_default_recipient() -> str:
     return str(getattr(settings, 'GREENAPI_RECIPIENT', '237678317658'))
 
 
-# ── fonction d'envoi simplifiée (utilisée par les tâches Celery) ─────────────
+# ── envoi synchrone ──────────────────────────────────────────────────────────
 
 def send_whatsapp(message: str, phone: Optional[str] = None) -> bool:
     """
-    Point d'entrée unique pour envoyer un message WhatsApp.
-    Retourne True si succès, False si erreur (sans propager l'exception).
+    Envoie un message WhatsApp de façon synchrone (bloquant).
+    Retourne True si succès, False si erreur — ne propage jamais d'exception.
+
+    À utiliser uniquement quand on est déjà dans un thread dédié
+    (ex: appelé depuis send_whatsapp_async). Préférer send_whatsapp_async
+    dans le code applicatif.
 
     :param message: Texte à envoyer
     :param phone:   Numéro cible. Si None, utilise GREENAPI_RECIPIENT du settings.
@@ -175,3 +180,37 @@ def send_whatsapp(message: str, phone: Optional[str] = None) -> bool:
     except Exception as exc:
         logger.exception("[GreenAPI] Erreur inattendue : %s", exc)
         return False
+
+
+# ── envoi asynchrone (threading) — point d'entrée principal ─────────────────
+
+def send_whatsapp_async(message: str, phone: Optional[str] = None) -> None:
+    """
+    Envoie un message WhatsApp dans un thread daemon indépendant (fire-and-forget).
+
+    Avantages :
+      • Ne bloque jamais l'appelant — retourne immédiatement.
+      • La logique de retry (4 × backoff) s'exécute en arrière-plan.
+      • Indépendant du contexte appelant : fonctionne depuis une vue Django,
+        un thread cron, un signal ou n'importe quel code applicatif.
+      • Chaque envoi a son propre thread nommé pour faciliter le débogage.
+
+    :param message: Texte à envoyer
+    :param phone:   Numéro cible. Si None, utilise GREENAPI_RECIPIENT du settings.
+    """
+    target = phone or get_default_recipient()
+    preview = message[:60].replace('\n', ' ')
+
+    def _worker():
+        logger.info("[GreenAPI][thread] Envoi WA → %s | msg: %s…", target, preview)
+        success = send_whatsapp(message, phone)
+        if success:
+            logger.info("[GreenAPI][thread] Envoi WA réussi → %s", target)
+        else:
+            logger.warning("[GreenAPI][thread] Envoi WA échoué → %s", target)
+
+    # Nom unique pour traçabilité dans les logs Render
+    thread_name = f"wa-{target[-6:]}-{id(message) & 0xFFFF:04x}"
+    t = threading.Thread(target=_worker, name=thread_name, daemon=True)
+    t.start()
+    logger.debug("[GreenAPI] Thread %s démarré.", thread_name)
