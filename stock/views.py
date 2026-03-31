@@ -376,6 +376,7 @@ def discharge_create(request):
                 })
 
         # All valid – create discharge atomically
+        low_stock_ids = []
         with transaction.atomic():
             discharge = Discharge.objects.create(
                 user=request.user,
@@ -397,10 +398,15 @@ def discharge_create(request):
                     note=f'Décharge #{discharge.pk} - {destination}',
                 )
 
-                # Trigger low-stock real-time notification if needed
+                # Collect low-stock IDs to notify AFTER transaction commits
                 if item['equipment'].is_low_stock:
-                    from .tasks import notify_low_stock_realtime
-                    run_async(notify_low_stock_realtime, item['equipment'].id)
+                    low_stock_ids.append(item['equipment'].id)
+
+        # ── Notifications après commit de la transaction ──────────────
+        # (appelé hors du bloc atomique pour que le thread voie les données commitées)
+        from .tasks import notify_low_stock_realtime
+        for eq_id in low_stock_ids:
+            run_async(notify_low_stock_realtime, eq_id)
 
         # ── WhatsApp : résumé de la décharge envoyé en arrière-plan ──
         run_async(whatsapp_discharge_created, discharge.id)

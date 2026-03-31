@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+# Seuil d'alerte stock faible — hardcodé pour éviter toute dépendance aux settings
+LOW_STOCK_THRESHOLD = 5
+
 
 class Equipment(models.Model):
     name = models.CharField(max_length=200, verbose_name="Nom de l'équipement")
@@ -25,9 +28,7 @@ class Equipment(models.Model):
 
     @property
     def is_low_stock(self):
-        from django.conf import settings
-        threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 5)
-        return self.quantity <= threshold
+        return self.quantity <= LOW_STOCK_THRESHOLD
 
 
 class Discharge(models.Model):

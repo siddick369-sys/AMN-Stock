@@ -19,6 +19,9 @@ Chaque événement critique déclenche :
 import logging
 from django.conf import settings
 from django.contrib.auth.models import User
+
+# Seuil d'alerte stock faible — hardcodé
+LOW_STOCK_THRESHOLD = 5
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.utils import timezone
 from django.template.loader import render_to_string
@@ -51,7 +54,7 @@ def check_low_stock():
     """
     from stock.models import Equipment
 
-    threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 5)
+    threshold = LOW_STOCK_THRESHOLD
     low_items = Equipment.objects.filter(quantity__lte=threshold)
 
     if not low_items.exists():
@@ -135,7 +138,7 @@ def notify_low_stock_realtime(equipment_id):
             cache.set('low_stock_notifications', notifs, timeout=3600)
 
         # ── WhatsApp ───────────────────────────────────────────────────
-        threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 5)
+        threshold = LOW_STOCK_THRESHOLD
         wa_msg = (
             f"{_header('⚠️', 'Stock faible détecté')}\n\n"
             f"📦 Équipement : *{equipment.name}*\n"

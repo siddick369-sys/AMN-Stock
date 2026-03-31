@@ -19,10 +19,12 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Seuil d'alerte stock faible — hardcodé
+LOW_STOCK_THRESHOLD = 5
 
 # ── Modèle Groq ──────────────────────────────────────────────────────────────
 GROQ_MODEL   = "llama-3.3-70b-versatile"
@@ -43,7 +45,7 @@ def build_stock_context(days: int = 30) -> dict[str, Any]:
 
     since = timezone.now() - timedelta(days=days)
     now_str = timezone.now().strftime("%d/%m/%Y à %H:%M")
-    threshold = getattr(settings, "LOW_STOCK_THRESHOLD", 5)
+    threshold = LOW_STOCK_THRESHOLD
 
     # ── équipements ──────────────────────────────────────────────────────────
     all_equip = Equipment.objects.all()
