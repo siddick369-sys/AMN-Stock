@@ -1,18 +1,13 @@
-import os
 import dj_database_url
 from pathlib import Path
-from dotenv import load_dotenv
-from decouple import config as decouple_config
-
-load_dotenv()
+from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ['SECRET_KEY']  # Obligatoire en prod — pas de fallback
-
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# ── Clés & mode ────────────────────────────────────────────────────────────────
+SECRET_KEY = config('SECRET_KEY')                        # obligatoire — pas de fallback
+DEBUG       = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -56,28 +51,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'amn_stock.wsgi.application'
 
-# PostgreSQL via DATABASE_URL (NeonDB pooled — PgBouncer transaction mode)
-# En local sans DATABASE_URL → fallback SQLite pour le dev
-# ⚠️  ssl_require ne doit PAS être utilisé ici : il injecte sslmode dans
-#     OPTIONS pour TOUS les backends, y compris SQLite → TypeError au build.
-#     Le ?sslmode=require est déjà inclus dans l'URL NeonDB et parsé par
-#     dj_database_url → OPTIONS: {'sslmode': 'require'} côté PostgreSQL seulement.
-DATABASES_URL = "postgresql://neondb_owner:npg_UXJLNP1p6lMT@ep-tiny-glitter-ak3uds22.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require"
-_DATABASE_URL = os.environ.get("DATABASES_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
-_IS_POSTGRES = _DATABASE_URL.startswith(('postgres://', 'postgresql://'))
+# ── Base de données ────────────────────────────────────────────────────────────
+# En dev (sans DATABASE_URL dans .env) → SQLite local.
+# En prod (Render / NeonDB) → lire DATABASE_URL depuis les env vars.
+# ⚠️  Le ?sslmode=require doit être dans l'URL NeonDB — ne pas utiliser ssl_require
+#     car il injecte sslmode dans OPTIONS pour TOUS les backends (y compris SQLite).
+_DATABASE_URL = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+_IS_POSTGRES   = _DATABASE_URL.startswith(('postgres://', 'postgresql://'))
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=DATABASES_URL,
-        conn_max_age=60,          # 0 obligatoire avec PgBouncer transaction mode (NeonDB)
+    'default': dj_database_url.parse(
+        _DATABASE_URL,
+        conn_max_age=60,
         conn_health_checks=True,
-        ssl_require= True,
     )
 }
 
-# DISABLE_SERVER_SIDE_CURSORS uniquement pour PostgreSQL :
-# PgBouncer transaction mode ne supporte pas les named cursors (Paginator, iterator()).
-# Ne pas appliquer à SQLite (clé ignorée mais propre de ne pas polluer la config).
+# PgBouncer transaction mode (NeonDB) : pas de server-side cursors
 if _IS_POSTGRES:
     DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
@@ -89,32 +79,33 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'fr-fr'
-TIME_ZONE = 'Africa/Abidjan'
+TIME_ZONE     = 'Africa/Abidjan'
 USE_I18N = True
-USE_TZ = True
+USE_TZ   = True
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL    = '/static/'
+STATIC_ROOT   = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_URL           = '/login/'
+LOGIN_REDIRECT_URL  = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# Email configuration
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@amn.africa')
-ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@amn.africa').split(',')
+# ── Email (Brevo SMTP) ─────────────────────────────────────────────────────────
+EMAIL_BACKEND       = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST          = config('EMAIL_HOST',     default='smtp-relay.brevo.com')
+EMAIL_PORT          = config('EMAIL_PORT',     default=2525, cast=int)
+EMAIL_USE_TLS       = config('EMAIL_USE_TLS',  default=True, cast=bool)
+EMAIL_HOST_USER     = config('EMAIL_HOST_USER',     default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL',  default='noreply@amn.africa')
+# Liste d'adresses séparées par des virgules : admin@amn.africa,autre@amn.africa
+ADMIN_EMAIL         = config('ADMIN_EMAIL', default='', cast=Csv())
 
-# Cache configuration (Thread-safe, non-persistent local memory cache)
+# ── Cache (LocMemCache — thread-safe, single worker) ───────────────────────────
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -122,70 +113,29 @@ CACHES = {
     }
 }
 
-# Low stock threshold
-LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
+# ── Cron Pseudo-Worker ─────────────────────────────────────────────────────────
+# Token protégeant le webhook /tasks/trigger-celery/
+# Générer : python -c "import secrets; print(secrets.token_hex(32))"
+CRON_TRIGGER_TOKEN = config('CRON_TRIGGER_TOKEN', default='')
 
-# ── Cron Pseudo-Worker ──────────────────────────────────────────────────────
-# Token secret protégeant le webhook /tasks/trigger-celery/
-# Générer avec : python -c "import secrets; print(secrets.token_hex(32))"
-# ⚠️  Utiliser uniquement des caractères alphanumériques (hex) pour éviter
-#     les problèmes d'encodage URL dans cron-job.org
-CRON_TRIGGER_TOKEN = os.environ.get('CRON_TRIGGER_TOKEN', '')
+# ── Groq AI ────────────────────────────────────────────────────────────────────
+GROQ_API_KEY = config('GROQ_API_KEY', default='')
 
-# ── Groq AI ────────────────────────────────────────────────────────────────
-# Obtenir la clé sur https://console.groq.com/keys
-# Utilise python-decouple : lit depuis .env en dev, variables d'environnement en prod
-GROQ_API_KEY = decouple_config("GROQ_API_KEY", default="")
+# ── Green API (WhatsApp) ───────────────────────────────────────────────────────
+GREENAPI_INSTANCE_ID = config('GREENAPI_INSTANCE_ID', default='')
+GREENAPI_TOKEN       = config('GREENAPI_TOKEN',       default='')
+# Numéro cible sans '+', ex: 237678317658 pour +237 678 317 658
+GREENAPI_RECIPIENT   = config('GREENAPI_RECIPIENT',   default='')
+GREENAPI_BASE_URL    = config('GREENAPI_BASE_URL',    default='https://api.green-api.com')
 
-# ── Green API (WhatsApp) ────────────────────────────────────────────────────
-# Obtenir les credentials sur https://console.green-api.com/
-GREENAPI_INSTANCE_ID = os.environ.get("GREENAPI_INSTANCE_ID", "")
-GREENAPI_TOKEN       = os.environ.get("GREENAPI_TOKEN", "")
-# Numéro WhatsApp cible (sans +), ex: 237678317658 pour +237 678 317 658
-GREENAPI_RECIPIENT   = os.environ.get('GREENAPI_RECIPIENT', '237678317658')
-# URL de base Green API (ne pas modifier sauf test)
-GREENAPI_BASE_URL    = os.environ.get('GREENAPI_BASE_URL', 'https://api.green-api.com')
-
-# ── Sécurité HTTPS (activé uniquement en production, DEBUG=False) ────────────
+# ── Sécurité HTTPS (prod uniquement, DEBUG=False) ──────────────────────────────
 if not DEBUG:
-    # Render place l'application derrière un proxy SSL
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT     = True
-
-    # Cookies sécurisés (HTTPS uniquement)
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE    = True
-
-    # HSTS : force le navigateur à utiliser HTTPS pendant 1 an
-    SECURE_HSTS_SECONDS                = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS     = True
-    SECURE_HSTS_PRELOAD                = True
-
-    # Domaines de confiance pour les requêtes CSRF (remplacer par votre domaine Render)
-    CSRF_TRUSTED_ORIGINS = os.environ.get(
-        'CSRF_TRUSTED_ORIGINS', ''
-    ).split(',')
-
-    # Empêche le sniffing de type MIME
+    SECURE_PROXY_SSL_HEADER     = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT         = True
+    SESSION_COOKIE_SECURE       = True
+    CSRF_COOKIE_SECURE          = True
+    SECURE_HSTS_SECONDS         = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD         = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-
-EMAIL_HOST = 'smtp-relay.brevo.com'
-EMAIL_PORT = 2525
-EMAIL_USE_TLS = True
-
-# --- TES IDENTIFIANTS BREVO ---
-# L'identifiant que Brevo t'a donné (celui de ton message)
-EMAIL_HOST_USER = '9f4b2a001@smtp-brevo.com'
-
-# Ta NOUVELLE clé secrète (que tu vas générer, pas celle postée ici)
-EMAIL_HOST_PASSWORD = 'K7VXJCdE8cx3rDmY'
-ADMIN_EMAIL = 'sasukenozel@gmail.com'
-
-# --- TRES IMPORTANT ---
-# Ici, mets l'email avec lequel tu as créé le compte Brevo (ex: alexis@gmail.com)
-# C'est l'adresse que les gens verront comme expéditeur.
-DEFAULT_FROM_EMAIL = 'sasukenozel@gmail.com'
-
+    CSRF_TRUSTED_ORIGINS        = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())

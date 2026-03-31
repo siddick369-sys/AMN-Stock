@@ -1,7 +1,7 @@
-import os
 import json
 from datetime import timedelta
 
+from decouple import config
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.cache import cache
@@ -2018,7 +2018,7 @@ def db_check(request):
         'database': str(db_name),
         'host': str(host),
         'is_postgresql': 'postgresql' in engine or 'psycopg' in engine,
-        'DATABASE_URL_env': bool(os.environ.get('DATABASE_URL')),
+        'DATABASE_URL_env': bool(config('DATABASE_URL', default='')),
     }
 
     try:
